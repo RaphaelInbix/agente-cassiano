@@ -22,6 +22,7 @@ from flask_cors import CORS
 from executions.scrapers.newsletter_scraper import NewsletterScraper
 from executions.scrapers.reddit_scraper import RedditScraper
 from executions.processors.content_curator import ContentCurator
+from executions.integrations.notion_client import NotionClient
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,17 @@ def run_pipeline_background():
         save_status("running", "Iniciando coleta...")
         items = run_pipeline()
         save_data(items)
+
+        # Publica no Notion
+        if items:
+            save_status("running", "Publicando no Notion...")
+            try:
+                notion = NotionClient()
+                notion.publish(items)
+                logger.info("Publicação no Notion concluída")
+            except Exception as e:
+                logger.error(f"Erro ao publicar no Notion: {e}")
+
         save_status("done", f"{len(items)} itens atualizados")
     except Exception as e:
         logger.error(f"Erro no pipeline: {e}")
