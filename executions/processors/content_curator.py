@@ -1,0 +1,216 @@
+"""
+Módulo de curadoria e filtragem de conteúdo.
+Filtra, pontua e seleciona os artigos mais relevantes para o público-alvo:
+profissionais de economia real sem background técnico em IA.
+"""
+
+import logging
+import re
+from collections import Counter
+
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+
+from executions.scrapers.base_scraper import ScrapedItem
+
+logger = logging.getLogger(__name__)
+
+# Palavras-chave que aumentam relevância para o público-alvo
+POSITIVE_KEYWORDS = [
+    # Negócios
+    "business", "empresa", "negócio", "negocio", "company", "startup",
+    "empreendedor", "entrepreneur", "revenue", "receita", "profit",
+    "marketing", "sales", "vendas", "roi", "produtividade", "productivity",
+    "eficiência", "efficiency", "automação", "automation", "workflow",
+    # Setores econômicos
+    "indústria", "industry", "manufatura", "manufacturing", "agro",
+    "agronegócio", "agribusiness", "comércio", "commerce", "retail",
+    "varejo", "serviços", "services", "logística", "logistics",
+    "supply chain", "cadeia de suprimentos",
+    # IA aplicada
+    "ai tool", "ferramenta de ia", "chatgpt", "copilot", "assistente",
+    "assistant", "no-code", "low-code", "ai agent", "agente de ia",
+    "prompt", "generative ai", "ia generativa",
+    # Impacto prático
+    "how to", "como usar", "tutorial", "guia", "guide", "dica", "tip",
+    "case study", "caso de uso", "use case", "example", "exemplo",
+    "free", "grátis", "gratuito", "launch", "lançamento", "new tool",
+    "nova ferramenta", "trending", "future", "futuro",
+    # RH e gestão
+    "hr", "recursos humanos", "human resources", "manager", "gestor",
+    "gestão", "management", "team", "equipe", "hiring", "contratação",
+    "career", "carreira",
+]
+
+# Palavras-chave que reduzem relevância (conteúdo muito técnico)
+NEGATIVE_KEYWORDS = [
+    "arxiv", "paper", "benchmark", "fine-tune", "fine-tuning",
+    "transformer", "attention mechanism", "gradient", "backpropagation",
+    "pytorch", "tensorflow", "cuda", "gpu cluster", "training loss",
+    "epoch", "hyperparameter", "rlhf", "token limit", "context window",
+    "embedding", "vector database", "rag pipeline", "langchain",
+    "llama weights", "model weights", "checkpoint", "quantization",
+    "inference speed", "vram", "kernel", "compiler", "assembly",
+    "leetcode", "algorithm", "data structure",
+]
+
+# Conteúdo que deve ser filtrado (spam, irrelevante)
+SPAM_PATTERNS = [
+    r"(?i)onlyfans",
+    r"(?i)crypto.*pump",
+    r"(?i)free money",
+    r"(?i)click here to win",
+    r"(?i)subscribe.*free",
+    r"(?i)\$\d+.*per day",
+    r"(?i)get rich",
+]
+
+
+class ContentCurator:
+    """Filtra e pontua conteúdo para o público-alvo."""
+
+    def curate(
+        self, items: list[ScrapedItem], max_items: int = 30
+    ) -> list[ScrapedItem]:
+        """Pipeline completo de curadoria."""
+        logger.info(f"Iniciando curadoria de {len(items)} itens...")
+
+        # 1. Remove duplicatas
+        items = self._deduplicate(items)
+        logger.info(f"  Após deduplicação: {len(items)} itens")
+
+        # 2. Remove spam
+        items = self._filter_spam(items)
+        logger.info(f"  Após filtro de spam: {len(items)} itens")
+
+        # 3. Separa newsletters (sempre incluídas) dos demais
+        newsletter_items = [i for i in items if i.source == "Newsletter"]
+        other_items = [i for i in items if i.source != "Newsletter"]
+
+        logger.info(
+            f"  Newsletters: {len(newsletter_items)} (inclusão garantida) | "
+            f"Outros: {len(other_items)}"
+        )
+
+        # 4. Pontua relevância de todos
+        newsletter_items = self._score_relevance(newsletter_items)
+        other_items = self._score_relevance(other_items)
+
+        # 5. Ordena newsletters e outros por relevância
+        newsletter_items.sort(key=lambda x: x.relevance_score, reverse=True)
+        other_items.sort(key=lambda x: x.relevance_score, reverse=True)
+
+        # 6. Monta resultado: todas as newsletters + top N dos demais
+        remaining_slots = max(0, max_items - len(newsletter_items))
+        selected = newsletter_items + other_items[:remaining_slots]
+
+        logger.info(
+            f"  Selecionados: {len(selected)} itens finais "
+            f"({len(newsletter_items)} newsletters + "
+            f"{min(len(other_items), remaining_slots)} outros)"
+        )
+
+        return selected
+
+    def _deduplicate(self, items: list[ScrapedItem]) -> list[ScrapedItem]:
+        """Remove itens duplicados por URL ou título similar."""
+        seen_urls = set()
+        seen_titles = set()
+        unique = []
+
+        for item in items:
+            # Normaliza URL
+            url_key = item.url.rstrip("/").lower()
+            if url_key in seen_urls:
+                continue
+
+            # Normaliza título para comparação
+            title_key = self._normalize_text(item.title)
+            if title_key in seen_titles:
+                continue
+
+            seen_urls.add(url_key)
+            seen_titles.add(title_key)
+            unique.append(item)
+
+        return unique
+
+    def _filter_spam(self, items: list[ScrapedItem]) -> list[ScrapedItem]:
+        """Remove conteúdo spam ou irrelevante."""
+        filtered = []
+        for item in items:
+            full_text = f"{item.title} {item.description}".lower()
+
+            is_spam = False
+            for pattern in SPAM_PATTERNS:
+                if re.search(pattern, full_text):
+                    is_spam = True
+                    logger.debug(f"  Spam detectado: {item.title[:60]}")
+                    break
+
+            if not is_spam:
+                filtered.append(item)
+
+        return filtered
+
+    def _score_relevance(self, items: list[ScrapedItem]) -> list[ScrapedItem]:
+        """Pontua cada item com base em keywords e heurísticas."""
+        for item in items:
+            score = item.relevance_score  # Mantém score original (upvotes, etc.)
+            full_text = f"{item.title} {item.description}".lower()
+
+            # Bonus por palavras positivas
+            for keyword in POSITIVE_KEYWORDS:
+                if keyword.lower() in full_text:
+                    score += 10
+
+            # Penalidade por conteúdo muito técnico
+            tech_count = 0
+            for keyword in NEGATIVE_KEYWORDS:
+                if keyword.lower() in full_text:
+                    tech_count += 1
+                    score -= 5
+
+            # Se o conteúdo é excessivamente técnico, penaliza mais
+            if tech_count > 3:
+                score -= 20
+
+            # Bonus por ter descrição substancial
+            if len(item.description) > 100:
+                score += 5
+
+            # Bonus por título claro (não muito curto nem muito longo)
+            if 20 < len(item.title) < 100:
+                score += 3
+
+            item.relevance_score = max(0, score)
+
+        return items
+
+    def _normalize_text(self, text: str) -> str:
+        """Normaliza texto para comparação de similaridade."""
+        text = text.lower().strip()
+        text = re.sub(r"[^\w\s]", "", text)
+        text = re.sub(r"\s+", " ", text)
+        # Pega as primeiras 8 palavras para comparação
+        words = text.split()[:8]
+        return " ".join(words)
+
+    def get_summary_stats(self, items: list[ScrapedItem]) -> dict:
+        """Retorna estatísticas da curadoria para logging."""
+        sources = Counter(item.source for item in items)
+        channels = Counter(item.channel for item in items)
+        avg_score = (
+            sum(item.relevance_score for item in items) / len(items)
+            if items
+            else 0
+        )
+
+        return {
+            "total_items": len(items),
+            "by_source": dict(sources),
+            "by_channel": dict(channels),
+            "avg_relevance_score": round(avg_score, 2),
+            "top_item": items[0].title if items else "N/A",
+        }
