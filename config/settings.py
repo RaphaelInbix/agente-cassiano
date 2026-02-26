@@ -36,6 +36,9 @@ NEWSLETTERS = [
 # ============================================================
 # FONTES - REDDIT
 # ============================================================
+# OAuth credentials (registrar app em https://www.reddit.com/prefs/apps)
+REDDIT_CLIENT_ID = os.getenv("REDDIT_CLIENT_ID", "")
+REDDIT_CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET", "")
 REDDIT_SUBREDDITS = [
     {
         "name": "r/AIToolMadeEasy",

@@ -1,7 +1,10 @@
 """
-Scraper para Reddit usando a interface JSON pública (sem API key).
-Coleta top posts da semana de cada subreddit configurado.
-Usa fallback entre domínios: www -> old -> fallback HTML.
+Scraper para Reddit usando OAuth API (recomendado para servidores).
+Fallback para JSON público quando não há credenciais configuradas.
+
+OAuth é essencial para deploy em cloud (Render, etc.) porque o Reddit
+bloqueia/rate-limita agressivamente IPs de datacenter no endpoint público.
+Com OAuth: 60 requests/min garantidos, sem bloqueio por IP.
 """
 
 import logging
@@ -13,59 +16,135 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from config.settings import REDDIT_SUBREDDITS, REQUEST_TIMEOUT, REQUEST_DELAY, MAX_RETRIES
+from config.settings import (
+    REDDIT_SUBREDDITS, REQUEST_TIMEOUT, REQUEST_DELAY, MAX_RETRIES,
+    REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET,
+)
 from executions.scrapers.base_scraper import BaseScraper, ScrapedItem
 
 logger = logging.getLogger(__name__)
 
-# Domínios em ordem de preferência para o endpoint .json
+# Domínios para fallback (sem OAuth)
 REDDIT_DOMAINS = [
     "https://www.reddit.com",
     "https://old.reddit.com",
 ]
 
+OAUTH_TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
+OAUTH_BASE_URL = "https://oauth.reddit.com"
+
 
 class RedditScraper(BaseScraper):
-    """Scraper para subreddits configurados via JSON público do Reddit."""
+    """Scraper para subreddits via Reddit OAuth API (ou JSON público como fallback)."""
 
     def __init__(self):
         super().__init__()
-        # Headers que imitam navegador real - evita bloqueio 403
+        self._access_token: Optional[str] = None
+        self._use_oauth = bool(REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET)
+        self._working_domain: Optional[str] = None
+
+        # Headers para ambos os modos
         self.session.headers.update({
             "User-Agent": (
+                "AgenteCassiano/1.0 (by /u/InbixBot) "
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/131.0.0.0 Safari/537.36"
             ),
-            "Accept": "text/html,application/xhtml+xml,application/json,*/*;q=0.8",
+            "Accept": "application/json",
             "Accept-Language": "en-US,en;q=0.9,pt-BR;q=0.8",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Sec-Fetch-User": "?1",
-            "Upgrade-Insecure-Requests": "1",
         })
-        self._working_domain: Optional[str] = None
 
-    def _reddit_json(self, path: str, params: Optional[dict] = None) -> Optional[dict]:
-        """
-        Faz GET em /{path}.json com fallback entre domínios.
-        Garante que não há barra dupla na URL.
-        """
-        path = path.strip("/")  # remove barras extras
+        if self._use_oauth:
+            self._authenticate()
 
-        # Se já descobrimos um domínio funcional, tenta ele primeiro
+    def _authenticate(self):
+        """Obtém access_token via OAuth2 client_credentials."""
+        try:
+            response = requests.post(
+                OAUTH_TOKEN_URL,
+                auth=(REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET),
+                data={"grant_type": "client_credentials"},
+                headers={
+                    "User-Agent": "AgenteCassiano/1.0 (by /u/InbixBot)",
+                },
+                timeout=10,
+            )
+            if response.status_code == 200:
+                data = response.json()
+                self._access_token = data.get("access_token")
+                if self._access_token:
+                    self.session.headers["Authorization"] = f"Bearer {self._access_token}"
+                    logger.info("Reddit OAuth autenticado com sucesso")
+                    return
+            logger.warning(
+                f"Falha na autenticação OAuth: {response.status_code} - "
+                f"{response.text[:200]}. Usando fallback público."
+            )
+            self._use_oauth = False
+        except requests.RequestException as e:
+            logger.warning(f"Erro na autenticação OAuth: {e}. Usando fallback público.")
+            self._use_oauth = False
+
+    def _reddit_get(self, path: str, params: Optional[dict] = None) -> Optional[dict]:
+        """Faz GET na API do Reddit (OAuth ou público com fallback)."""
+        path = path.strip("/")
+
+        if self._use_oauth:
+            return self._oauth_get(path, params)
+        return self._public_get(path, params)
+
+    def _oauth_get(self, path: str, params: Optional[dict] = None) -> Optional[dict]:
+        """GET via OAuth API (oauth.reddit.com). Rate limit: 60 req/min."""
+        url = f"{OAUTH_BASE_URL}/{path}"
+
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                response = self.session.get(url, params=params, timeout=REQUEST_TIMEOUT)
+
+                if response.status_code == 200:
+                    time.sleep(REQUEST_DELAY)
+                    return response.json()
+
+                if response.status_code == 401:
+                    logger.warning("Token expirado, re-autenticando...")
+                    self._authenticate()
+                    if not self._use_oauth:
+                        return self._public_get(path, params)
+                    continue
+
+                if response.status_code == 429:
+                    wait = min(REQUEST_DELAY * attempt * 2, 5)
+                    logger.warning(f"  OAuth rate limited. Aguardando {wait}s...")
+                    time.sleep(wait)
+                    continue
+
+                logger.warning(f"  OAuth HTTP {response.status_code} para {path}")
+                if attempt < MAX_RETRIES:
+                    time.sleep(REQUEST_DELAY * attempt)
+
+            except requests.RequestException as e:
+                logger.warning(f"  OAuth erro de rede: {e}")
+                if attempt < MAX_RETRIES:
+                    time.sleep(REQUEST_DELAY * attempt)
+
+        logger.error(f"OAuth falhou para /{path}. Tentando fallback público...")
+        return self._public_get(path, params)
+
+    def _public_get(self, path: str, params: Optional[dict] = None) -> Optional[dict]:
+        """GET via endpoint público (.json) com fallback entre domínios."""
+        # Garante que o path termina com .json para o endpoint público
+        json_path = path if path.endswith(".json") else f"{path}.json"
+
         domains = list(REDDIT_DOMAINS)
         if self._working_domain:
             domains.remove(self._working_domain)
             domains.insert(0, self._working_domain)
 
         for domain in domains:
-            url = f"{domain}/{path}"
+            url = f"{domain}/{json_path}"
             for attempt in range(1, MAX_RETRIES + 1):
                 try:
-                    logger.info(f"[Reddit][{domain}] Tentativa {attempt} GET {url}")
                     response = self.session.get(
                         url, params=params, timeout=REQUEST_TIMEOUT
                     )
@@ -76,27 +155,24 @@ class RedditScraper(BaseScraper):
                         time.sleep(REQUEST_DELAY)
                         return data
 
-                    # 429 = rate limit → espera curta e tenta próximo domínio
                     if response.status_code == 429:
                         wait = min(REQUEST_DELAY * attempt * 2, 3)
                         logger.warning(f"  Rate limited. Aguardando {wait}s...")
                         time.sleep(wait)
-                        break  # tenta próximo domínio em vez de insistir
+                        break
 
-                    # 403/500 → tenta próximo domínio direto
                     if response.status_code in (403, 500, 502, 503):
                         logger.warning(
                             f"  HTTP {response.status_code} em {domain}. "
                             f"Tentando próximo domínio..."
                         )
-                        break  # sai do retry, vai pro próximo domínio
+                        break
 
-                    # Outros erros → retry
                     response.raise_for_status()
 
                 except requests.exceptions.JSONDecodeError:
                     logger.warning(f"  Resposta não é JSON válido de {url}")
-                    break  # próximo domínio
+                    break
                 except requests.RequestException as e:
                     logger.warning(f"  Erro de rede: {e}")
                     if attempt < MAX_RETRIES:
@@ -134,8 +210,10 @@ class RedditScraper(BaseScraper):
     def _get_top_posts(self, subreddit_name: str, max_posts: int) -> list[ScrapedItem]:
         """Busca top posts da semana de um subreddit."""
         sub = subreddit_name.replace("r/", "")
-        data = self._reddit_json(
-            f"r/{sub}/top.json",
+
+        # OAuth usa path sem .json, público adiciona automaticamente
+        data = self._reddit_get(
+            f"r/{sub}/top",
             params={"t": "week", "limit": max_posts, "raw_json": 1},
         )
         if not data:
@@ -153,8 +231,8 @@ class RedditScraper(BaseScraper):
         per_term_limit = max(2, max_posts // len(search_terms))
 
         for term in search_terms:
-            data = self._reddit_json(
-                f"r/{sub}/search.json",
+            data = self._reddit_get(
+                f"r/{sub}/search",
                 params={
                     "q": term,
                     "restrict_sr": "on",
