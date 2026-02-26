@@ -126,7 +126,7 @@ export function CuradoriaInbix() {
 
   return (
     <div style={styles.app}>
-      {/* HEADER */}
+      {/* HEADER ATUALIZADO */}
       <div style={styles.accent} />
       <div style={styles.header}>
         <div style={{ flex: 1 }}>
@@ -134,11 +134,8 @@ export function CuradoriaInbix() {
             <h1 style={styles.title}>
               Curadoria <span style={{ color: "#085fff" }}>Inbix</span>
             </h1>
-            <span style={styles.badge}>AI Powered</span>
           </div>
-          <p style={styles.subtitle}>
-            Conteúdo curado de IA e tecnologia para decisores e profissionais.
-          </p>
+          <p style={styles.subtitle}>Top post e artigos da semana.</p>
           <div style={styles.stats}>
             {items.length > 0 && (
               <span style={styles.stat}>{items.length} artigos</span>
@@ -156,7 +153,7 @@ export function CuradoriaInbix() {
           onClick={handleUpdate}
           disabled={loading}
         >
-          {loading ? (statusMsg || "Atualizando...") : "Atualizar"}
+          {loading ? "Atualizando..." : "Atualizar"}
         </button>
       </div>
 
@@ -172,7 +169,11 @@ export function CuradoriaInbix() {
               }}
               onClick={() => setFilter(key)}
             >
-              {key === "all" ? "Todos" : key === "newsletters" ? "Newsletters" : "Reddit"}
+              {key === "all"
+                ? "Todos"
+                : key === "newsletters"
+                  ? "Newsletters"
+                  : "Reddit"}
               <span
                 style={{
                   ...styles.tabCount,
@@ -193,7 +194,8 @@ export function CuradoriaInbix() {
           <div style={styles.empty}>
             <h3>Nenhum conteúdo disponível</h3>
             <p style={{ color: "#a1a1aa", fontSize: 14 }}>
-              Clique em "Atualizar" para buscar os artigos e posts mais recentes.
+              Clique em "Atualizar" para buscar os artigos e posts mais
+              recentes.
             </p>
           </div>
         ) : (
@@ -211,8 +213,7 @@ export function CuradoriaInbix() {
                   <span
                     style={{
                       ...styles.cardSource,
-                      color:
-                        item.source === "Reddit" ? "#ff4500" : "#085fff",
+                      color: item.source === "Reddit" ? "#ff4500" : "#085fff",
                     }}
                   >
                     {item.channel}
@@ -264,8 +265,9 @@ export function CuradoriaInbix() {
       {/* FOOTER */}
       <div style={styles.footer}>
         <p style={{ fontSize: 13, color: "#a1a1aa" }}>
-          Powered by <strong style={{ color: "#71717a" }}>Agente Cassiano</strong>{" "}
-          — Curadoria automatizada Inbix
+          Powered by{" "}
+          <strong style={{ color: "#71717a" }}>Agente Cassiano</strong> —
+          Curadoria automatizada Inbix
         </p>
       </div>
     </div>
@@ -273,11 +275,12 @@ export function CuradoriaInbix() {
 }
 
 // ============================================================
-// INLINE STYLES (necessário para Framer)
+// INLINE STYLES
 // ============================================================
 const styles: Record<string, React.CSSProperties> = {
   app: {
-    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    fontFamily:
+      "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     minHeight: "100vh",
     background: "#fafafa",
     color: "#09090b",
@@ -308,16 +311,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 28,
     fontWeight: 800,
     letterSpacing: -0.5,
-  },
-  badge: {
-    padding: "2px 10px",
-    fontSize: 11,
-    fontWeight: 600,
-    textTransform: "uppercase" as const,
-    letterSpacing: 0.5,
-    color: "#085fff",
-    background: "#e8f0ff",
-    borderRadius: 9999,
   },
   subtitle: {
     fontSize: 15,
