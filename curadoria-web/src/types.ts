@@ -15,4 +15,4 @@ export interface CuradoriaData {
   items: CuratedItem[];
 }
 
-export type FilterType = "all" | "newsletters" | "reddit";
+export type FilterType = "all" | "newsletters" | "reddit" | "youtube";

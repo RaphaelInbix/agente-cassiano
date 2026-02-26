@@ -29,4 +29,18 @@ Por ser uma comunidade grande, usar termos de busca específicos:
 - "future"
 - "trending"
 
+## YouTube (vídeos recentes filtrados por keywords)
+| Canal | URL |
+|-------|-----|
+| Deborah Folloni | https://www.youtube.com/@deborahfolloni/videos |
+| Jovens de Negócios | https://www.youtube.com/@jovensdenegocios/videos |
+| No Code Startup | https://www.youtube.com/@nocodestartup/videos |
+| Código Fonte TV | https://www.youtube.com/@codigofontetv/videos |
+| Matheus Battisti | https://www.youtube.com/@MatheusBattisti/videos |
+| Hora de Negócios | https://www.youtube.com/@horadenegocios/videos |
+| Andre Prado | https://www.youtube.com/@AndrePrado/videos |
+| MrEflow | https://www.youtube.com/@mreflow/videos |
+| AI Explained | https://www.youtube.com/@aiexplained-official/videos |
 
+### Palavras-chave YouTube
+DeepSeek, NVIDIA, Sora, Anthropic, Opus, Claude code, Claude, Cursor, antigravity, gemini, IA, AI, TOOLS, NANO BANANA, Chatgpt, GPT, LLM, OpenClaw, OpenAI, n8n, N8N, Supabase

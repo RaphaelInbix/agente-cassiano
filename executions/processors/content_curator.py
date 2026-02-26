@@ -84,31 +84,39 @@ class ContentCurator:
         items = self._filter_spam(items)
         logger.info(f"  Após filtro de spam: {len(items)} itens")
 
-        # 3. Separa newsletters (sempre incluídas) dos demais
-        newsletter_items = [i for i in items if i.source == "Newsletter"]
-        other_items = [i for i in items if i.source != "Newsletter"]
+        # 3. Separa por fonte (cada uma tem inclusão garantida)
+        newsletters = [i for i in items if i.source == "Newsletter"]
+        reddit = [i for i in items if i.source == "Reddit"]
+        youtube = [i for i in items if i.source == "YouTube"]
+        others = [i for i in items if i.source not in ("Newsletter", "Reddit", "YouTube")]
 
         logger.info(
-            f"  Newsletters: {len(newsletter_items)} (inclusão garantida) | "
-            f"Outros: {len(other_items)}"
+            f"  Newsletters: {len(newsletters)} | Reddit: {len(reddit)} | "
+            f"YouTube: {len(youtube)} | Outros: {len(others)}"
         )
 
-        # 4. Pontua relevância de todos
-        newsletter_items = self._score_relevance(newsletter_items)
-        other_items = self._score_relevance(other_items)
+        # 4. Pontua relevância de cada grupo
+        newsletters = self._score_relevance(newsletters)
+        reddit = self._score_relevance(reddit)
+        youtube = self._score_relevance(youtube)
+        others = self._score_relevance(others)
 
-        # 5. Ordena newsletters e outros por relevância
-        newsletter_items.sort(key=lambda x: x.relevance_score, reverse=True)
-        other_items.sort(key=lambda x: x.relevance_score, reverse=True)
+        # 5. Ordena cada grupo por relevância
+        newsletters.sort(key=lambda x: x.relevance_score, reverse=True)
+        reddit.sort(key=lambda x: x.relevance_score, reverse=True)
+        youtube.sort(key=lambda x: x.relevance_score, reverse=True)
+        others.sort(key=lambda x: x.relevance_score, reverse=True)
 
-        # 6. Monta resultado: todas as newsletters + top N dos demais
-        remaining_slots = max(0, max_items - len(newsletter_items))
-        selected = newsletter_items + other_items[:remaining_slots]
+        # 6. Garante slots para cada fonte, depois preenche com sobra
+        selected = newsletters + youtube + reddit + others
+        selected = selected[:max_items]
 
+        nl_count = len([i for i in selected if i.source == "Newsletter"])
+        rd_count = len([i for i in selected if i.source == "Reddit"])
+        yt_count = len([i for i in selected if i.source == "YouTube"])
         logger.info(
             f"  Selecionados: {len(selected)} itens finais "
-            f"({len(newsletter_items)} newsletters + "
-            f"{min(len(other_items), remaining_slots)} outros)"
+            f"({nl_count} newsletters + {rd_count} reddit + {yt_count} youtube)"
         )
 
         return selected

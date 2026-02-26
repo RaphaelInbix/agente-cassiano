@@ -27,10 +27,9 @@ export function Header({ onUpdate, loading, lastUpdate, totalItems }: HeaderProp
             <h1 className="header__title">
               Curadoria <span className="header__title--accent">Inbix</span>
             </h1>
-            <span className="header__badge">AI Powered</span>
           </div>
           <p className="header__subtitle">
-            Conteúdo curado de IA e tecnologia para decisores e profissionais.
+            Top posts e artigos da semana
           </p>
           <div className="header__stats">
             {totalItems > 0 && (

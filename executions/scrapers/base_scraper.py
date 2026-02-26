@@ -3,6 +3,7 @@ Base scraper com funcionalidades compartilhadas entre todos os scrapers.
 """
 
 import time
+import random
 import logging
 import requests
 from dataclasses import dataclass, field
@@ -37,23 +38,26 @@ class BaseScraper:
         self.session = requests.Session()
         self.session.headers.update(HEADERS)
 
+    @staticmethod
+    def _jitter():
+        """Delay aleatório anti-ban (mais natural que delay fixo)."""
+        time.sleep(REQUEST_DELAY * (0.5 + random.random()))
+
     def fetch_page(self, url: str, params: Optional[dict] = None) -> Optional[str]:
         """Faz requisição HTTP com retry e delay anti-ban."""
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                logger.info(f"[Tentativa {attempt}] GET {url}")
                 response = self.session.get(
                     url, params=params, timeout=REQUEST_TIMEOUT
                 )
-                # 403 = bloqueado pelo site, não adianta tentar de novo
                 if response.status_code == 403:
                     logger.warning(f"  403 Forbidden para {url} - pulando")
                     return None
                 response.raise_for_status()
-                time.sleep(REQUEST_DELAY)
+                self._jitter()
                 return response.text
             except requests.RequestException as e:
-                logger.warning(f"Erro na tentativa {attempt} para {url}: {e}")
+                logger.warning(f"Erro tentativa {attempt} para {url}: {e}")
                 if attempt < MAX_RETRIES:
                     time.sleep(REQUEST_DELAY * attempt)
         logger.error(f"Falha após {MAX_RETRIES} tentativas para {url}")
@@ -63,15 +67,14 @@ class BaseScraper:
         """Faz requisição HTTP esperando resposta JSON."""
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                logger.info(f"[Tentativa {attempt}] GET JSON {url}")
                 response = self.session.get(
                     url, params=params, timeout=REQUEST_TIMEOUT
                 )
                 response.raise_for_status()
-                time.sleep(REQUEST_DELAY)
+                self._jitter()
                 return response.json()
             except requests.RequestException as e:
-                logger.warning(f"Erro na tentativa {attempt} para {url}: {e}")
+                logger.warning(f"Erro tentativa {attempt} para {url}: {e}")
                 if attempt < MAX_RETRIES:
                     time.sleep(REQUEST_DELAY * attempt)
         logger.error(f"Falha após {MAX_RETRIES} tentativas para {url}")

@@ -10,7 +10,7 @@
  * para funcionar de forma independente no Framer.
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 
 // ============================================================
 // TYPES
@@ -26,22 +26,38 @@ interface CuratedItem {
   tags: string[];
 }
 
+type FilterType = "all" | "newsletters" | "reddit" | "youtube";
+
 // ============================================================
 // CONFIGURAÇÃO - Altere para o URL da sua API
 // ============================================================
-const API_URL = "https://agente-cassiano.onrender.com"; // Alterar para URL de produção
+const API_URL = "https://agente-cassiano.onrender.com";
+
+// ============================================================
+// HELPERS
+// ============================================================
+function getSourceColor(source: string): string {
+  switch (source.toLowerCase()) {
+    case "reddit":
+      return "#ff4500";
+    case "youtube":
+      return "#ff0000";
+    default:
+      return "#085fff";
+  }
+}
 
 // ============================================================
 // CURADORIA INBIX — Componente completo para Framer
 // ============================================================
 export function CuradoriaInbix() {
   const [items, setItems] = useState<CuratedItem[]>([]);
-  const [filter, setFilter] = useState<"all" | "newsletters" | "reddit">("all");
+  const [filter, setFilter] = useState<FilterType>("all");
   const [loading, setLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const [statusMsg, setStatusMsg] = useState<string>("");
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -59,60 +75,79 @@ export function CuradoriaInbix() {
     fetchData();
   }, [fetchData]);
 
-  const pollStatus = useCallback(async () => {
-    const poll = setInterval(async () => {
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const pollStatus = useCallback(() => {
+    pollRef.current = setInterval(async () => {
       try {
         const res = await fetch(`${API_URL}/api/status`);
+        if (!res.ok) return;
         const data = await res.json();
-        setStatusMsg(data.detail || "");
-        if (data.status === "done") {
-          clearInterval(poll);
+
+        if (data.status === "running") {
+          setStatusMsg(data.detail || "Processando...");
+        } else if (data.status === "done") {
+          stopPolling();
+          setStatusMsg(null);
           setLoading(false);
-          setStatusMsg("");
           await fetchData();
         } else if (data.status === "error") {
-          clearInterval(poll);
+          stopPolling();
+          setStatusMsg(null);
           setLoading(false);
-          setStatusMsg("");
           setError(data.detail || "Erro ao atualizar");
         }
       } catch {
         /* continue polling */
       }
-    }, 3000);
-    return poll;
-  }, [fetchData]);
+    }, 2000);
+  }, [fetchData, stopPolling]);
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, [stopPolling]);
 
   const handleUpdate = async () => {
     setLoading(true);
     setError(null);
-    setStatusMsg("Iniciando...");
+    setStatusMsg("Iniciando coleta de dados...");
     try {
       const res = await fetch(`${API_URL}/api/atualizar`, { method: "POST" });
-      const data = await res.json();
-      if (data.success) {
-        pollStatus();
-      } else {
-        setLoading(false);
-        setError("Erro ao iniciar atualização");
-      }
+      if (!res.ok) throw new Error("Erro");
+      pollStatus();
     } catch {
       setLoading(false);
+      setStatusMsg(null);
       setError("Falha na conexão com o servidor");
     }
   };
 
   const filtered = items.filter((item) => {
-    if (filter === "newsletters") return item.source !== "Reddit";
+    if (filter === "all") return true;
+    if (filter === "newsletters") return item.source === "Newsletter";
     if (filter === "reddit") return item.source === "Reddit";
+    if (filter === "youtube") return item.source === "YouTube";
     return true;
   });
 
   const counts = {
     all: items.length,
-    newsletters: items.filter((i) => i.source !== "Reddit").length,
+    newsletters: items.filter((i) => i.source === "Newsletter").length,
     reddit: items.filter((i) => i.source === "Reddit").length,
+    youtube: items.filter((i) => i.source === "YouTube").length,
   };
+
+  const TABS: { key: FilterType; label: string }[] = [
+    { key: "all", label: "Todos" },
+    { key: "newsletters", label: "Newsletters" },
+    { key: "reddit", label: "Reddit" },
+    { key: "youtube", label: "YouTube" },
+  ];
 
   const formattedDate = lastUpdate
     ? new Date(lastUpdate).toLocaleDateString("pt-BR", {
@@ -126,7 +161,7 @@ export function CuradoriaInbix() {
 
   return (
     <div style={styles.app}>
-      {/* HEADER ATUALIZADO */}
+      {/* HEADER */}
       <div style={styles.accent} />
       <div style={styles.header}>
         <div style={{ flex: 1 }}>
@@ -135,7 +170,7 @@ export function CuradoriaInbix() {
               Curadoria <span style={{ color: "#085fff" }}>Inbix</span>
             </h1>
           </div>
-          <p style={styles.subtitle}>Top post e artigos da semana.</p>
+          <p style={styles.subtitle}>Top posts e artigos da semana</p>
           <div style={styles.stats}>
             {items.length > 0 && (
               <span style={styles.stat}>{items.length} artigos</span>
@@ -157,30 +192,57 @@ export function CuradoriaInbix() {
         </button>
       </div>
 
-      {/* TABS */}
+      {/* MAIN CONTENT */}
       <div style={styles.content}>
+        {/* LOADING CARD */}
+        {loading && (
+          <div style={styles.loadingCard}>
+            <div style={styles.loadingIcon}>
+              <svg
+                width="28"
+                height="28"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#085fff"
+                strokeWidth="2"
+                style={{ animation: "framer-spin 1s linear infinite" }}
+              >
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
+              <style>{`@keyframes framer-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+            </div>
+            <div style={styles.loadingText}>
+              <strong style={{ display: "block", fontSize: 15, color: "#09090b", marginBottom: 2 }}>
+                O script Python está rodando, aguarde alguns segundos
+              </strong>
+              {statusMsg && (
+                <p style={{ fontSize: 13, color: "#71717a", margin: 0 }}>
+                  {statusMsg}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TABS */}
         <div style={styles.tabs}>
-          {(["all", "newsletters", "reddit"] as const).map((key) => (
+          {TABS.map((tab) => (
             <button
-              key={key}
+              key={tab.key}
               style={{
                 ...styles.tab,
-                ...(filter === key ? styles.tabActive : {}),
+                ...(filter === tab.key ? styles.tabActive : {}),
               }}
-              onClick={() => setFilter(key)}
+              onClick={() => setFilter(tab.key)}
             >
-              {key === "all"
-                ? "Todos"
-                : key === "newsletters"
-                  ? "Newsletters"
-                  : "Reddit"}
+              {tab.label}
               <span
                 style={{
                   ...styles.tabCount,
-                  ...(filter === key ? styles.tabCountActive : {}),
+                  ...(filter === tab.key ? styles.tabCountActive : {}),
                 }}
               >
-                {counts[key]}
+                {counts[tab.key]}
               </span>
             </button>
           ))}
@@ -200,64 +262,61 @@ export function CuradoriaInbix() {
           </div>
         ) : (
           <div style={styles.grid}>
-            {filtered.map((item, i) => (
-              <div
-                key={`${item.url}-${i}`}
-                style={{
-                  ...styles.card,
-                  borderLeftColor:
-                    item.source === "Reddit" ? "#ff4500" : "#085fff",
-                }}
-              >
-                <div style={styles.cardHeader}>
-                  <span
-                    style={{
-                      ...styles.cardSource,
-                      color: item.source === "Reddit" ? "#ff4500" : "#085fff",
-                    }}
-                  >
-                    {item.channel}
-                  </span>
-                  {item.relevance_score > 0 && (
-                    <span style={styles.cardScore}>
-                      {Math.round(item.relevance_score)}
+            {filtered.map((item, i) => {
+              const color = getSourceColor(item.source);
+              return (
+                <div
+                  key={`${item.url}-${i}`}
+                  style={{
+                    ...styles.card,
+                    borderLeftColor: color,
+                  }}
+                >
+                  <div style={styles.cardHeader}>
+                    <span style={{ ...styles.cardSource, color }}>
+                      {item.channel}
                     </span>
-                  )}
-                </div>
-                <h3 style={styles.cardTitle}>
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: "inherit", textDecoration: "none" }}
-                  >
-                    {item.title}
-                  </a>
-                </h3>
-                {item.description && item.description !== item.title && (
-                  <p style={styles.cardDesc}>
-                    {item.description.length > 200
-                      ? item.description.slice(0, 200) + "..."
-                      : item.description}
-                  </p>
-                )}
-                <div style={styles.cardFooter}>
-                  <span style={{ fontSize: 13, color: "#a1a1aa" }}>
-                    {item.author}
-                  </span>
-                  {item.url && (
+                    {item.relevance_score > 0 && (
+                      <span style={styles.cardScore}>
+                        {Math.round(item.relevance_score)}
+                      </span>
+                    )}
+                  </div>
+                  <h3 style={styles.cardTitle}>
                     <a
                       href={item.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      style={styles.cardLink}
+                      style={{ color: "inherit", textDecoration: "none" }}
                     >
-                      Ler mais →
+                      {item.title}
                     </a>
+                  </h3>
+                  {item.description && item.description !== item.title && (
+                    <p style={styles.cardDesc}>
+                      {item.description.length > 200
+                        ? item.description.slice(0, 200) + "..."
+                        : item.description}
+                    </p>
                   )}
+                  <div style={styles.cardFooter}>
+                    <span style={{ fontSize: 13, color: "#a1a1aa" }}>
+                      {item.author}
+                    </span>
+                    {item.url && (
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={styles.cardLink}
+                      >
+                        {item.source === "YouTube" ? "Assistir →" : "Ler mais →"}
+                      </a>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -346,6 +405,23 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: 1200,
     margin: "0 auto",
     padding: "0 24px 64px",
+  },
+  loadingCard: {
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+    padding: 24,
+    marginTop: 24,
+    marginBottom: 0,
+    background: "#e8f0ff",
+    border: "1px solid rgba(8, 95, 255, 0.2)",
+    borderRadius: 10,
+  },
+  loadingIcon: {
+    flexShrink: 0,
+  },
+  loadingText: {
+    flex: 1,
   },
   tabs: {
     display: "flex",

@@ -22,6 +22,7 @@
 
   --color-reddit: #ff4500;
   --color-newsletter: #085fff;
+  --color-youtube: #ff0000;
   --color-success: #22c55e;
   --color-error: #ef4444;
 
@@ -471,6 +472,49 @@ button {
 }
 
 /* ============================================================
+   LOADING CARD
+   ============================================================ */
+
+.loading-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-lg);
+  background: var(--color-primary-light);
+  border: 1px solid rgba(8, 95, 255, 0.2);
+  border-radius: var(--radius-md);
+  animation: fadeIn 0.3s ease;
+}
+
+.loading-card__icon {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.loading-card__text {
+  flex: 1;
+}
+
+.loading-card__text strong {
+  display: block;
+  font-size: 15px;
+  color: var(--color-text);
+  margin-bottom: 2px;
+}
+
+.loading-card__text p {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
    ERROR BANNER
    ============================================================ */
 
@@ -533,6 +577,17 @@ button {
   .tabs {
     width: 100%;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tabs__btn {
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .content-grid {
@@ -547,15 +602,73 @@ button {
     flex-wrap: wrap;
     gap: var(--space-sm);
   }
+
+  .loading-card {
+    padding: var(--space-md);
+  }
+
+  .card__footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-sm);
+  }
 }
 
 @media (max-width: 480px) {
+  .header__content {
+    padding: var(--space-md) var(--space-sm);
+  }
+
+  .header__title {
+    font-size: 20px;
+  }
+
+  .header__subtitle {
+    font-size: 14px;
+  }
+
+  .main {
+    padding: 0 var(--space-sm) var(--space-xl);
+  }
+
+  .tabs {
+    gap: 2px;
+    padding: 3px;
+  }
+
   .tabs__btn {
-    padding: 8px 14px;
+    padding: 8px 12px;
     font-size: 13px;
   }
 
   .card {
     padding: var(--space-md);
+    border-radius: var(--radius-md);
+  }
+
+  .card__title {
+    font-size: 15px;
+  }
+
+  .card__description {
+    font-size: 13px;
+  }
+
+  .loading-card {
+    flex-direction: column;
+    text-align: center;
+    padding: var(--space-md);
+  }
+
+  .loading-card__text strong {
+    font-size: 14px;
+  }
+
+  .footer {
+    padding: var(--space-md) var(--space-sm);
+  }
+
+  .footer p {
+    font-size: 12px;
   }
 }

@@ -33,8 +33,9 @@ class NotionClient:
         logger.info(f"Publicando {len(items)} itens no Notion...")
 
         # Agrupa por fonte
-        newsletters = [i for i in items if i.source != "Reddit" and i.source != "X (Twitter)"]
+        newsletters = [i for i in items if i.source == "Newsletter"]
         reddit_posts = [i for i in items if i.source == "Reddit"]
+        youtube_videos = [i for i in items if i.source == "YouTube"]
         x_posts = [i for i in items if i.source == "X (Twitter)"]
 
         blocks = []
@@ -56,6 +57,12 @@ class NotionClient:
         if reddit_posts:
             blocks.append(self._heading_block("Reddit", level=2))
             for item in reddit_posts:
+                blocks.append(self._toggle_block(item))
+
+        # Seção YouTube
+        if youtube_videos:
+            blocks.append(self._heading_block("YouTube", level=2))
+            for item in youtube_videos:
                 blocks.append(self._toggle_block(item))
 
         # Seção X

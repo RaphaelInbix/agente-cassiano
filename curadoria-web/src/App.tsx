@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Header } from "./components/Header";
 import { SectionTabs } from "./components/SectionTabs";
 import { ContentCard } from "./components/ContentCard";
@@ -13,6 +13,8 @@ function App() {
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [initialLoad, setInitialLoad] = useState(true);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -33,37 +35,71 @@ function App() {
     fetchData();
   }, [fetchData]);
 
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const pollStatus = useCallback(() => {
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/status`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (data.status === "running") {
+          setStatusMsg(data.message || "Processando...");
+        } else if (data.status === "done") {
+          stopPolling();
+          setStatusMsg(null);
+          setLoading(false);
+          await fetchData();
+        } else if (data.status === "error") {
+          stopPolling();
+          setStatusMsg(null);
+          setLoading(false);
+          setError(data.message || "Erro ao atualizar");
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 2000);
+  }, [fetchData, stopPolling]);
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, [stopPolling]);
+
   const handleUpdate = async () => {
     setLoading(true);
     setError(null);
+    setStatusMsg("Iniciando coleta de dados...");
     try {
       const res = await fetch(`${API_BASE}/api/atualizar`, { method: "POST" });
       if (!res.ok) throw new Error("Erro ao atualizar");
-      const data = await res.json();
-      if (data.success) {
-        setItems(data.items);
-        setLastUpdate(data.updated_at);
-      } else {
-        setError(data.error || "Erro desconhecido ao atualizar");
-      }
+      pollStatus();
     } catch (err) {
       setError("Falha na conexão com o servidor. Verifique se a API está rodando.");
-    } finally {
       setLoading(false);
+      setStatusMsg(null);
     }
   };
 
   const filtered = items.filter((item) => {
     if (filter === "all") return true;
-    if (filter === "newsletters") return item.source !== "Reddit";
+    if (filter === "newsletters") return item.source === "Newsletter";
     if (filter === "reddit") return item.source === "Reddit";
+    if (filter === "youtube") return item.source === "YouTube";
     return true;
   });
 
   const counts = {
     all: items.length,
-    newsletters: items.filter((i) => i.source !== "Reddit").length,
+    newsletters: items.filter((i) => i.source === "Newsletter").length,
     reddit: items.filter((i) => i.source === "Reddit").length,
+    youtube: items.filter((i) => i.source === "YouTube").length,
   };
 
   return (
@@ -76,6 +112,20 @@ function App() {
       />
 
       <main className="main">
+        {loading && (
+          <div className="loading-card">
+            <div className="loading-card__icon">
+              <svg className="spinner" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
+            </div>
+            <div className="loading-card__text">
+              <strong>O script Python está rodando, aguarde alguns segundos</strong>
+              {statusMsg && <p>{statusMsg}</p>}
+            </div>
+          </div>
+        )}
+
         <SectionTabs active={filter} onChange={setFilter} counts={counts} />
 
         {error && (

@@ -41,65 +41,87 @@ REDDIT_SUBREDDITS = [
         "name": "r/AIToolMadeEasy",
         "url": "https://www.reddit.com/r/AIToolMadeEasy/",
         "search_terms": None,
-        "max_posts": 10,
+        "max_posts": 5,
     },
     {
         "name": "r/ChatGPT",
         "url": "https://www.reddit.com/r/ChatGPT/",
         "search_terms": ["Marketing", "Manager", "HR", "Sales", "future", "trending"],
-        "max_posts": 10,
+        "max_posts": 5,
     },
-{
+    {
         "name": "r/NextGenAITool",
         "url": "https://www.reddit.com/r/NextGenAITool/",
         "search_terms": None,
-        "max_posts": 10,
+        "max_posts": 5,
     },
     {
         "name": "r/singularity",
         "url": "https://www.reddit.com/r/singularity/",
         "search_terms": None,
-        "max_posts": 10,
+        "max_posts": 5,
     },
     {
         "name": "r/ChatGPTpro",
         "url": "https://www.reddit.com/r/ChatGPTpro/",
         "search_terms": ["how to"],
-        "max_posts": 10,
+        "max_posts": 5,
     },
     {
         "name": "r/AIforSmallBusiness",
         "url": "https://www.reddit.com/r/AIforSmallBusiness/",
         "search_terms": None,
-        "max_posts": 10,
+        "max_posts": 5,
     },
     {
         "name": "r/ClaudeAI",
         "url": "https://www.reddit.com/r/ClaudeAI/",
         "search_terms": None,
-        "max_posts": 10,
+        "max_posts": 5,
     },
     {
         "name": "r/ArtificialInteligence",
         "url": "https://www.reddit.com/r/ArtificialInteligence/",
         "search_terms": None,
-        "max_posts": 10,
+        "max_posts": 5,
     },
     {
         "name": "r/AI_Agents",
         "url": "https://www.reddit.com/r/AI_Agents/",
         "search_terms": None,
-        "max_posts": 10,
+        "max_posts": 5,
     },
 ]
 
 
+# ============================================================
+# FONTES - YOUTUBE (RSS Feeds)
+# ============================================================
+YOUTUBE_CHANNELS = [
+    {"name": "Deborah Folloni", "handle": "deborahfolloni"},
+    {"name": "Jovens de Negócios", "handle": "jovensdenegocios"},
+    {"name": "No Code Startup", "handle": "nocodestartup"},
+    {"name": "Código Fonte TV", "handle": "codigofontetv"},
+    {"name": "Matheus Battisti", "handle": "MatheusBattisti"},
+    {"name": "Hora de Negócios", "handle": "horadenegocios"},
+    {"name": "Andre Prado", "handle": "AndrePrado"},
+    {"name": "MrEflow", "handle": "mreflow"},
+    {"name": "AI Explained", "handle": "aiexplained-official"},
+]
+
+YOUTUBE_KEYWORDS = [
+    "DeepSeek", "NVIDIA", "Sora", "Anthropic", "Opus", "Claude code", "Claude",
+    "Cursor", "antigravity", "gemini", "IA", "AI", "TOOLS", "NANO BANANA",
+    "Chatgpt", "GPT", "LLM", "OpenClaw", "OpenAI", "n8n", "N8N", "Supabase",
+]
+
+YOUTUBE_MAX_RESULTS = 15  # top vídeos após filtro por keywords
 
 # ============================================================
 # SCRAPING
 # ============================================================
-REQUEST_TIMEOUT = 15  # segundos
-REQUEST_DELAY = 1  # segundos entre requisições (anti-ban)
+REQUEST_TIMEOUT = 10  # segundos
+REQUEST_DELAY = 0.3  # segundos entre requisições (anti-ban)
 MAX_RETRIES = 2
 
 USER_AGENT = (

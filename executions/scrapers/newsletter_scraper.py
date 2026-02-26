@@ -12,6 +12,7 @@ import json
 import logging
 import re
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
@@ -30,18 +31,23 @@ class NewsletterScraper(BaseScraper):
     """Scraper para newsletters beehiiv."""
 
     def scrape(self) -> list[ScrapedItem]:
-        """Coleta artigos de todas as newsletters."""
+        """Coleta artigos de todas as newsletters em paralelo."""
         all_items = []
-        for newsletter in NEWSLETTERS:
-            logger.info(f"Scraping newsletter: {newsletter['name']}")
+
+        def _scrape_one(newsletter):
             try:
                 items = self._scrape_newsletter(newsletter)
-                all_items.extend(items)
-                logger.info(
-                    f"  -> {len(items)} artigos coletados de {newsletter['name']}"
-                )
+                logger.info(f"  -> {len(items)} artigos de {newsletter['name']}")
+                return items
             except Exception as e:
                 logger.error(f"Erro ao scraper {newsletter['name']}: {e}")
+                return []
+
+        with ThreadPoolExecutor(max_workers=len(NEWSLETTERS)) as pool:
+            futures = {pool.submit(_scrape_one, nl): nl for nl in NEWSLETTERS}
+            for future in as_completed(futures):
+                all_items.extend(future.result())
+
         return all_items
 
     def _scrape_newsletter(self, newsletter: dict) -> list[ScrapedItem]:
@@ -179,24 +185,24 @@ class NewsletterScraper(BaseScraper):
             f"buscando top {max_articles} mais recentes"
         )
 
-        # Busca JSON-LD de cada artigo recente
+        # Busca JSON-LD de artigos recentes em paralelo
+        candidates = [url for url, _ in article_entries[:max_articles * 2]]
+
         items = []
-        fetched = 0
-        for article_url, _lastmod in article_entries:
-            if len(items) >= max_articles:
-                break
-            # Limita tentativas para não demorar demais
-            if fetched >= max_articles * 2:
-                break
-            fetched += 1
-
-            html = self.fetch_page(article_url)
-            if not html:
-                continue
-
-            item = self._parse_jsonld_article(html, name, article_url)
-            if item:
-                items.append(item)
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            future_map = {
+                pool.submit(self.fetch_page, url): url for url in candidates
+            }
+            for future in as_completed(future_map):
+                if len(items) >= max_articles:
+                    break
+                url = future_map[future]
+                html = future.result()
+                if not html:
+                    continue
+                item = self._parse_jsonld_article(html, name, url)
+                if item:
+                    items.append(item)
 
         return items
 

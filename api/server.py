@@ -8,6 +8,7 @@ import logging
 import os
 import sys
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from datetime import datetime
 
@@ -21,6 +22,7 @@ from flask_cors import CORS
 
 from executions.scrapers.newsletter_scraper import NewsletterScraper
 from executions.scrapers.reddit_scraper import RedditScraper
+from executions.scrapers.youtube_scraper import YouTubeScraper
 from executions.processors.content_curator import ContentCurator
 from executions.integrations.notion_client import NotionClient
 
@@ -55,30 +57,48 @@ def load_status():
 
 
 def run_pipeline():
-    """Executa o pipeline de coleta e curadoria."""
+    """Executa o pipeline de coleta e curadoria (newsletters + reddit em paralelo)."""
     all_items = []
+    save_status("running", "Coletando newsletters, Reddit e YouTube em paralelo...")
 
-    # Newsletters
-    save_status("running", "Coletando newsletters...")
-    try:
-        newsletter_scraper = NewsletterScraper()
-        newsletter_items = newsletter_scraper.scrape()
-        all_items.extend(newsletter_items)
-        logger.info(f"Newsletters: {len(newsletter_items)} artigos coletados")
-    except Exception as e:
-        logger.error(f"Erro ao coletar newsletters: {e}")
+    def _scrape_newsletters():
+        try:
+            scraper = NewsletterScraper()
+            items = scraper.scrape()
+            logger.info(f"Newsletters: {len(items)} artigos coletados")
+            return items
+        except Exception as e:
+            logger.error(f"Erro ao coletar newsletters: {e}")
+            return []
 
-    # Reddit
-    save_status("running", "Coletando Reddit...")
-    try:
-        reddit_scraper = RedditScraper()
-        reddit_items = reddit_scraper.scrape()
-        reddit_items.sort(key=lambda x: x.relevance_score, reverse=True)
-        reddit_items = reddit_items[:15]
-        all_items.extend(reddit_items)
-        logger.info(f"Reddit: {len(reddit_items)} posts coletados")
-    except Exception as e:
-        logger.error(f"Erro ao coletar Reddit: {e}")
+    def _scrape_reddit():
+        try:
+            scraper = RedditScraper()
+            items = scraper.scrape()
+            items.sort(key=lambda x: x.relevance_score, reverse=True)
+            logger.info(f"Reddit: {len(items)} posts coletados")
+            return items[:15]
+        except Exception as e:
+            logger.error(f"Erro ao coletar Reddit: {e}")
+            return []
+
+    def _scrape_youtube():
+        try:
+            scraper = YouTubeScraper()
+            items = scraper.scrape()
+            logger.info(f"YouTube: {len(items)} vídeos coletados")
+            return items
+        except Exception as e:
+            logger.error(f"Erro ao coletar YouTube: {e}")
+            return []
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        nl_future = pool.submit(_scrape_newsletters)
+        rd_future = pool.submit(_scrape_reddit)
+        yt_future = pool.submit(_scrape_youtube)
+        all_items.extend(nl_future.result())
+        all_items.extend(rd_future.result())
+        all_items.extend(yt_future.result())
 
     if not all_items:
         save_status("done", "Nenhum item coletado")
@@ -86,7 +106,7 @@ def run_pipeline():
 
     save_status("running", "Aplicando curadoria...")
     curator = ContentCurator()
-    curated = curator.curate(all_items, max_items=30)
+    curated = curator.curate(all_items, max_items=45)
     return curated
 
 
@@ -97,9 +117,11 @@ def run_pipeline_background():
         items = run_pipeline()
         save_data(items)
 
-        # Publica no Notion
+        # Marca como done para o frontend ANTES de publicar no Notion
+        save_status("done", f"{len(items)} itens atualizados")
+
+        # Publica no Notion em seguida (não bloqueia o frontend)
         if items:
-            save_status("running", "Publicando no Notion...")
             try:
                 notion = NotionClient()
                 notion.publish(items)
@@ -107,7 +129,6 @@ def run_pipeline_background():
             except Exception as e:
                 logger.error(f"Erro ao publicar no Notion: {e}")
 
-        save_status("done", f"{len(items)} itens atualizados")
     except Exception as e:
         logger.error(f"Erro no pipeline: {e}")
         save_status("error", str(e))
