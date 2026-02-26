@@ -103,9 +103,9 @@ REDDIT_SUBREDDITS = [
 # ============================================================
 # SCRAPING
 # ============================================================
-REQUEST_TIMEOUT = 30  # segundos
-REQUEST_DELAY = 2  # segundos entre requisições (anti-ban)
-MAX_RETRIES = 3
+REQUEST_TIMEOUT = 15  # segundos
+REQUEST_DELAY = 1  # segundos entre requisições (anti-ban)
+MAX_RETRIES = 2
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "

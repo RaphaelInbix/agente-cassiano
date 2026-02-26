@@ -45,6 +45,10 @@ class BaseScraper:
                 response = self.session.get(
                     url, params=params, timeout=REQUEST_TIMEOUT
                 )
+                # 403 = bloqueado pelo site, não adianta tentar de novo
+                if response.status_code == 403:
+                    logger.warning(f"  403 Forbidden para {url} - pulando")
+                    return None
                 response.raise_for_status()
                 time.sleep(REQUEST_DELAY)
                 return response.text

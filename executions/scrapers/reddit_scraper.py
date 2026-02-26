@@ -76,12 +76,12 @@ class RedditScraper(BaseScraper):
                         time.sleep(REQUEST_DELAY)
                         return data
 
-                    # 429 = rate limit → espera mais
+                    # 429 = rate limit → espera e tenta próximo domínio
                     if response.status_code == 429:
-                        wait = REQUEST_DELAY * attempt * 2
+                        wait = min(REQUEST_DELAY * attempt * 2, 6)
                         logger.warning(f"  Rate limited. Aguardando {wait}s...")
                         time.sleep(wait)
-                        continue
+                        break  # tenta próximo domínio em vez de insistir
 
                     # 403/500 → tenta próximo domínio direto
                     if response.status_code in (403, 500, 502, 503):
