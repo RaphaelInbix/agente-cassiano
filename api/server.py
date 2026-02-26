@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import sys
+import threading
 from dataclasses import asdict
 from datetime import datetime
 
@@ -29,6 +30,27 @@ CORS(app)
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 DATA_FILE = os.path.join(DATA_DIR, "curadoria.json")
+STATUS_FILE = os.path.join(DATA_DIR, "status.json")
+
+
+def save_status(status: str, detail: str = ""):
+    """Salva o status atual do pipeline."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    data = {
+        "status": status,
+        "detail": detail,
+        "timestamp": datetime.now().isoformat(),
+    }
+    with open(STATUS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
+
+
+def load_status():
+    """Carrega o status atual."""
+    if os.path.exists(STATUS_FILE):
+        with open(STATUS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"status": "idle", "detail": "", "timestamp": None}
 
 
 def run_pipeline():
@@ -36,6 +58,7 @@ def run_pipeline():
     all_items = []
 
     # Newsletters
+    save_status("running", "Coletando newsletters...")
     try:
         newsletter_scraper = NewsletterScraper()
         newsletter_items = newsletter_scraper.scrape()
@@ -45,6 +68,7 @@ def run_pipeline():
         logger.error(f"Erro ao coletar newsletters: {e}")
 
     # Reddit
+    save_status("running", "Coletando Reddit...")
     try:
         reddit_scraper = RedditScraper()
         reddit_items = reddit_scraper.scrape()
@@ -56,11 +80,25 @@ def run_pipeline():
         logger.error(f"Erro ao coletar Reddit: {e}")
 
     if not all_items:
+        save_status("done", "Nenhum item coletado")
         return []
 
+    save_status("running", "Aplicando curadoria...")
     curator = ContentCurator()
     curated = curator.curate(all_items, max_items=30)
     return curated
+
+
+def run_pipeline_background():
+    """Executa o pipeline em background thread."""
+    try:
+        save_status("running", "Iniciando coleta...")
+        items = run_pipeline()
+        save_data(items)
+        save_status("done", f"{len(items)} itens atualizados")
+    except Exception as e:
+        logger.error(f"Erro no pipeline: {e}")
+        save_status("error", str(e))
 
 
 def save_data(items):
@@ -93,14 +131,20 @@ def get_curadoria():
 
 @app.route("/api/atualizar", methods=["POST"])
 def atualizar():
-    """Executa o pipeline e retorna os dados atualizados."""
-    try:
-        items = run_pipeline()
-        data = save_data(items)
-        return jsonify({"success": True, **data})
-    except Exception as e:
-        logger.error(f"Erro no pipeline: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
+    """Inicia o pipeline em background e retorna imediatamente."""
+    status = load_status()
+    if status.get("status") == "running":
+        return jsonify({"success": True, "message": "Atualização já em andamento"})
+
+    thread = threading.Thread(target=run_pipeline_background, daemon=True)
+    thread.start()
+    return jsonify({"success": True, "message": "Atualização iniciada"})
+
+
+@app.route("/api/status", methods=["GET"])
+def get_status():
+    """Retorna o status atual do pipeline."""
+    return jsonify(load_status())
 
 
 @app.route("/api/health", methods=["GET"])

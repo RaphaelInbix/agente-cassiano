@@ -29,7 +29,7 @@ interface CuratedItem {
 // ============================================================
 // CONFIGURAÇÃO - Altere para o URL da sua API
 // ============================================================
-const API_URL = "https://sua-api.com"; // Alterar para URL de produção
+const API_URL = "https://agente-cassiano.onrender.com"; // Alterar para URL de produção
 
 // ============================================================
 // CURADORIA INBIX — Componente completo para Framer
@@ -40,6 +40,8 @@ export function CuradoriaInbix() {
   const [loading, setLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [statusMsg, setStatusMsg] = useState<string>("");
 
   const fetchData = useCallback(async () => {
     try {
@@ -57,22 +59,46 @@ export function CuradoriaInbix() {
     fetchData();
   }, [fetchData]);
 
+  const pollStatus = useCallback(async () => {
+    const poll = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/status`);
+        const data = await res.json();
+        setStatusMsg(data.detail || "");
+        if (data.status === "done") {
+          clearInterval(poll);
+          setLoading(false);
+          setStatusMsg("");
+          await fetchData();
+        } else if (data.status === "error") {
+          clearInterval(poll);
+          setLoading(false);
+          setStatusMsg("");
+          setError(data.detail || "Erro ao atualizar");
+        }
+      } catch {
+        /* continue polling */
+      }
+    }, 3000);
+    return poll;
+  }, [fetchData]);
+
   const handleUpdate = async () => {
     setLoading(true);
     setError(null);
+    setStatusMsg("Iniciando...");
     try {
       const res = await fetch(`${API_URL}/api/atualizar`, { method: "POST" });
       const data = await res.json();
       if (data.success) {
-        setItems(data.items || []);
-        setLastUpdate(data.updated_at);
+        pollStatus();
       } else {
-        setError("Erro ao atualizar");
+        setLoading(false);
+        setError("Erro ao iniciar atualização");
       }
     } catch {
-      setError("Falha na conexão com o servidor");
-    } finally {
       setLoading(false);
+      setError("Falha na conexão com o servidor");
     }
   };
 
@@ -130,7 +156,7 @@ export function CuradoriaInbix() {
           onClick={handleUpdate}
           disabled={loading}
         >
-          {loading ? "Atualizando..." : "Atualizar"}
+          {loading ? (statusMsg || "Atualizando...") : "Atualizar"}
         </button>
       </div>
 
