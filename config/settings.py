@@ -22,11 +22,6 @@ NOTION_BASE_URL = "https://api.notion.com/v1"
 # ============================================================
 NEWSLETTERS = [
     {
-        "name": "The Neuron Daily",
-        "url": "https://www.theneurondaily.com/",
-        "max_articles": 5,
-    },
-    {
         "name": "TechDrop News",
         "url": "https://www.techdrop.news/",
         "max_articles": 5,

@@ -3,7 +3,6 @@
 ## Newsletters (últimos 5 artigos de cada)
 | Fonte | URL | Foco |
 |-------|-----|------|
-| The Neuron Daily | https://www.theneurondaily.com/ | IA e tecnologia |
 | The Rundown AI | https://www.rundown.ai/ | IA aplicada |
 | TechDrop News | https://www.techdrop.news/ | Tecnologia e negócios |
 
