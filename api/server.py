@@ -124,6 +124,8 @@ def run_pipeline_background():
         if items:
             try:
                 notion = NotionClient()
+                # Limpa publicações antigas antes de publicar a nova
+                notion.clear_page()
                 notion.publish(items)
                 logger.info("Publicação no Notion concluída")
             except Exception as e:
@@ -178,6 +180,21 @@ def atualizar():
 def get_status():
     """Retorna o status atual do pipeline."""
     return jsonify(load_status())
+
+
+@app.route("/api/limpar-notion", methods=["POST"])
+def limpar_notion():
+    """Limpa todos os blocos antigos da página do Notion."""
+    try:
+        notion = NotionClient()
+        success = notion.clear_page()
+        if success:
+            return jsonify({"success": True, "message": "Página do Notion limpa com sucesso"})
+        else:
+            return jsonify({"success": False, "message": "Erro ao limpar página do Notion"}), 500
+    except Exception as e:
+        logger.error(f"Erro ao limpar Notion: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 @app.route("/api/health", methods=["GET"])

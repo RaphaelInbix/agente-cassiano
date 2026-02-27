@@ -5,7 +5,7 @@ Salva os artigos curados como blocos toggle na página configurada.
 
 import logging
 import requests
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 import sys
 import os
@@ -27,6 +27,65 @@ class NotionClient:
             "Notion-Version": NOTION_API_VERSION,
         }
         self.page_id = NOTION_PAGE_ID
+
+    def clear_page(self) -> bool:
+        """Remove todos os blocos filhos da página do Notion (limpa publicações antigas)."""
+        logger.info("Limpando blocos antigos da página do Notion...")
+        blocks = self._get_child_blocks()
+        if blocks is None:
+            logger.error("Não foi possível obter blocos da página.")
+            return False
+
+        if not blocks:
+            logger.info("Página já está vazia.")
+            return True
+
+        deleted = 0
+        for block in blocks:
+            block_id = block.get("id")
+            if not block_id:
+                continue
+            url = f"{NOTION_BASE_URL}/blocks/{block_id}"
+            try:
+                resp = requests.delete(url, headers=self.headers)
+                if resp.status_code == 200:
+                    deleted += 1
+                else:
+                    logger.warning(f"Erro ao deletar bloco {block_id}: {resp.status_code}")
+            except requests.RequestException as e:
+                logger.error(f"Erro de rede ao deletar bloco: {e}")
+
+        logger.info(f"Limpeza concluída: {deleted}/{len(blocks)} blocos removidos.")
+        return deleted == len(blocks)
+
+    def _get_child_blocks(self) -> list[dict] | None:
+        """Lista todos os blocos filhos da página (com paginação)."""
+        url = f"{NOTION_BASE_URL}/blocks/{self.page_id}/children"
+        all_blocks = []
+        start_cursor = None
+
+        while True:
+            params = {"page_size": 100}
+            if start_cursor:
+                params["start_cursor"] = start_cursor
+
+            try:
+                resp = requests.get(url, headers=self.headers, params=params)
+                if resp.status_code != 200:
+                    logger.error(f"Erro ao listar blocos: {resp.status_code} - {resp.text[:300]}")
+                    return None
+
+                data = resp.json()
+                all_blocks.extend(data.get("results", []))
+
+                if not data.get("has_more"):
+                    break
+                start_cursor = data.get("next_cursor")
+            except requests.RequestException as e:
+                logger.error(f"Erro de rede ao listar blocos: {e}")
+                return None
+
+        return all_blocks
 
     def publish(self, items: list[ScrapedItem]) -> bool:
         """Publica todos os itens curados na página do Notion."""
