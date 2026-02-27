@@ -24,6 +24,8 @@ interface CuratedItem {
   url: string;
   relevance_score: number;
   tags: string[];
+  published_date: string;
+  comment_count: number;
 }
 
 type FilterType = "all" | "newsletters" | "reddit" | "youtube";
@@ -44,6 +46,21 @@ function getSourceColor(source: string): string {
       return "#ff0000";
     default:
       return "#085fff";
+  }
+}
+
+function formatDate(isoDate: string): string {
+  if (!isoDate) return "";
+  try {
+    const date = new Date(isoDate);
+    if (isNaN(date.getTime())) return "";
+    return date.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      timeZone: "America/Sao_Paulo",
+    });
+  } catch {
+    return "";
   }
 }
 
@@ -116,14 +133,27 @@ export function CuradoriaInbix() {
     setLoading(true);
     setError(null);
     setStatusMsg("Iniciando coleta de dados...");
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120_000);
+
     try {
-      const res = await fetch(`${API_URL}/api/atualizar`, { method: "POST" });
+      const res = await fetch(`${API_URL}/api/atualizar`, {
+        method: "POST",
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
       if (!res.ok) throw new Error("Erro");
       pollStatus();
-    } catch {
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("Timeout na conexão. O servidor pode estar iniciando (cold start). Tente novamente em 30s.");
+      } else {
+        setError("Falha na conexão com o servidor");
+      }
       setLoading(false);
       setStatusMsg(null);
-      setError("Falha na conexão com o servidor");
     }
   };
 
@@ -144,9 +174,9 @@ export function CuradoriaInbix() {
 
   const TABS: { key: FilterType; label: string }[] = [
     { key: "all", label: "Todos" },
-    { key: "newsletters", label: "Newsletters" },
-    { key: "reddit", label: "Reddit" },
     { key: "youtube", label: "YouTube" },
+    { key: "reddit", label: "Reddit" },
+    { key: "newsletters", label: "Newsletters" },
   ];
 
   const formattedDate = lastUpdate
@@ -156,6 +186,7 @@ export function CuradoriaInbix() {
         year: "numeric",
         hour: "2-digit",
         minute: "2-digit",
+        timeZone: "America/Sao_Paulo",
       })
     : null;
 
@@ -180,16 +211,6 @@ export function CuradoriaInbix() {
             )}
           </div>
         </div>
-        <button
-          style={{
-            ...styles.updateBtn,
-            ...(loading ? { background: "#71717a", opacity: 0.7 } : {}),
-          }}
-          onClick={handleUpdate}
-          disabled={loading}
-        >
-          {loading ? "Atualizando..." : "Atualizar"}
-        </button>
       </div>
 
       {/* MAIN CONTENT */}
@@ -256,7 +277,7 @@ export function CuradoriaInbix() {
           <div style={styles.empty}>
             <h3>Nenhum conteúdo disponível</h3>
             <p style={{ color: "#a1a1aa", fontSize: 14 }}>
-              Clique em "Atualizar" para buscar os artigos e posts mais
+              Clique em "Atualizar dados" no rodapé para buscar os artigos e posts mais
               recentes.
             </p>
           </div>
@@ -264,6 +285,7 @@ export function CuradoriaInbix() {
           <div style={styles.grid}>
             {filtered.map((item, i) => {
               const color = getSourceColor(item.source);
+              const dateStr = formatDate(item.published_date);
               return (
                 <div
                   key={`${item.url}-${i}`}
@@ -276,11 +298,16 @@ export function CuradoriaInbix() {
                     <span style={{ ...styles.cardSource, color }}>
                       {item.channel}
                     </span>
-                    {item.relevance_score > 0 && (
-                      <span style={styles.cardScore}>
-                        {Math.round(item.relevance_score)}
-                      </span>
-                    )}
+                    <div style={styles.cardMeta}>
+                      {dateStr && (
+                        <span style={styles.cardDate}>{dateStr}</span>
+                      )}
+                      {item.comment_count > 0 && (
+                        <span style={styles.cardComments}>
+                          {item.comment_count} comments
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <h3 style={styles.cardTitle}>
                     <a
@@ -323,11 +350,23 @@ export function CuradoriaInbix() {
 
       {/* FOOTER */}
       <div style={styles.footer}>
-        <p style={{ fontSize: 13, color: "#a1a1aa" }}>
-          Powered by{" "}
-          <strong style={{ color: "#71717a" }}>Agente Cassiano</strong> —
-          Curadoria automatizada Inbix
-        </p>
+        <div style={styles.footerContent}>
+          <p style={{ fontSize: 13, color: "#a1a1aa", margin: 0 }}>
+            Powered by{" "}
+            <strong style={{ color: "#71717a" }}>Agente Cassiano</strong> —
+            Curadoria automatizada Inbix
+          </p>
+          <button
+            style={{
+              ...styles.footerBtn,
+              ...(loading ? { color: "#a1a1aa", opacity: 0.6 } : {}),
+            }}
+            onClick={handleUpdate}
+            disabled={loading}
+          >
+            {loading ? "Atualizando..." : "Atualizar dados"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -384,22 +423,6 @@ const styles: Record<string, React.CSSProperties> = {
   stat: {
     fontSize: 13,
     color: "#a1a1aa",
-  },
-  updateBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    padding: "12px 24px",
-    fontSize: 14,
-    fontWeight: 600,
-    color: "#fff",
-    background: "#085fff",
-    borderRadius: 10,
-    border: "none",
-    cursor: "pointer",
-    whiteSpace: "nowrap" as const,
-    flexShrink: 0,
-    marginTop: 4,
   },
   content: {
     maxWidth: 1200,
@@ -496,17 +519,31 @@ const styles: Record<string, React.CSSProperties> = {
     textTransform: "uppercase" as const,
     letterSpacing: 0.3,
   },
-  cardScore: {
+  cardMeta: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  cardDate: {
     display: "inline-flex",
     alignItems: "center",
-    justifyContent: "center",
-    minWidth: 32,
-    height: 24,
-    padding: "0 8px",
+    gap: 4,
     fontSize: 11,
-    fontWeight: 700,
+    fontWeight: 600,
     color: "#a1a1aa",
     background: "#fafafa",
+    padding: "2px 8px",
+    borderRadius: 9999,
+  },
+  cardComments: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    fontSize: 11,
+    fontWeight: 600,
+    color: "#a1a1aa",
+    background: "#fafafa",
+    padding: "2px 8px",
     borderRadius: 9999,
   },
   cardTitle: {
@@ -561,6 +598,26 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "32px 24px",
     borderTop: "1px solid #e4e4e7",
     background: "#fff",
+  },
+  footerContent: {
+    display: "flex",
+    flexDirection: "column" as const,
+    alignItems: "center",
+    gap: 16,
+  },
+  footerBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "8px 16px",
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#71717a",
+    background: "#fafafa",
+    border: "1px solid #e4e4e7",
+    borderRadius: 6,
+    cursor: "pointer",
+    fontFamily: "inherit",
   },
 };
 
