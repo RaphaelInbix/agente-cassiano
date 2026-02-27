@@ -76,21 +76,19 @@ export function CuradoriaInbix() {
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (): Promise<boolean> => {
     try {
       const res = await fetch(`${API_URL}/api/curadoria`);
       if (!res.ok) throw new Error("Erro ao carregar");
       const data = await res.json();
       setItems(data.items || []);
       setLastUpdate(data.updated_at);
+      // Retorna true se o backend está auto-atualizando (dados vazios)
+      return !!data._auto_updating;
     } catch {
-      /* silently fail on initial load */
+      return false;
     }
   }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -125,9 +123,19 @@ export function CuradoriaInbix() {
     }, 2000);
   }, [fetchData, stopPolling]);
 
+  // Na montagem, busca dados. Se vazio, ativa loading + polling automático
   useEffect(() => {
-    return () => stopPolling();
-  }, [stopPolling]);
+    let mounted = true;
+    (async () => {
+      const autoUpdating = await fetchData();
+      if (mounted && autoUpdating) {
+        setLoading(true);
+        setStatusMsg("Carregando conteúdo pela primeira vez...");
+        pollStatus();
+      }
+    })();
+    return () => { mounted = false; stopPolling(); };
+  }, [fetchData, pollStatus, stopPolling]);
 
   const handleUpdate = async () => {
     setLoading(true);

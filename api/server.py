@@ -159,8 +159,18 @@ def load_data():
 
 @app.route("/api/curadoria", methods=["GET"])
 def get_curadoria():
-    """Retorna os dados curados do cache."""
+    """Retorna os dados curados do cache. Auto-dispara pipeline se vazio."""
     data = load_data()
+
+    # Se não há dados, dispara o pipeline automaticamente
+    if not data.get("items"):
+        status = load_status()
+        if status.get("status") != "running":
+            logger.info("Dados vazios detectados — disparando pipeline automático")
+            thread = threading.Thread(target=run_pipeline_background, daemon=True)
+            thread.start()
+        data["_auto_updating"] = True
+
     return jsonify(data)
 
 

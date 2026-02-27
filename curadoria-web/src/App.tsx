@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Header } from "./components/Header";
 import { SectionTabs } from "./components/SectionTabs";
 import { ContentCard } from "./components/ContentCard";
-import type { CuratedItem, CuradoriaData, FilterType } from "./types";
+import type { CuratedItem, FilterType } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -16,24 +16,22 @@ function App() {
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (): Promise<boolean> => {
     try {
       const res = await fetch(`${API_BASE}/api/curadoria`);
       if (!res.ok) throw new Error("Erro ao carregar dados");
-      const data: CuradoriaData = await res.json();
+      const data = await res.json();
       setItems(data.items);
       setLastUpdate(data.updated_at);
       setError(null);
+      return !!data._auto_updating;
     } catch (err) {
       console.error("Erro ao buscar dados:", err);
+      return false;
     } finally {
       setInitialLoad(false);
     }
   }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -68,9 +66,19 @@ function App() {
     }, 2000);
   }, [fetchData, stopPolling]);
 
+  // Na montagem, busca dados. Se vazio, ativa loading + polling automático
   useEffect(() => {
-    return () => stopPolling();
-  }, [stopPolling]);
+    let mounted = true;
+    (async () => {
+      const autoUpdating = await fetchData();
+      if (mounted && autoUpdating) {
+        setLoading(true);
+        setStatusMsg("Carregando conteúdo pela primeira vez...");
+        pollStatus();
+      }
+    })();
+    return () => { mounted = false; stopPolling(); };
+  }, [fetchData, pollStatus, stopPolling]);
 
   const handleUpdate = async () => {
     setLoading(true);
