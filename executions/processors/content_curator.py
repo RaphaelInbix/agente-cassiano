@@ -57,14 +57,17 @@ NEGATIVE_KEYWORDS = [
 
 # Conteúdo que deve ser filtrado (spam, irrelevante)
 SPAM_PATTERNS = [
-    r"(?i)onlyfans",
-    r"(?i)crypto.*pump",
-    r"(?i)free money",
-    r"(?i)click here to win",
-    r"(?i)subscribe.*free",
-    r"(?i)\$\d+.*per day",
-    r"(?i)get rich",
+    re.compile(r"(?i)onlyfans"),
+    re.compile(r"(?i)crypto.*pump"),
+    re.compile(r"(?i)free money"),
+    re.compile(r"(?i)click here to win"),
+    re.compile(r"(?i)subscribe.*free"),
+    re.compile(r"(?i)\$\d+.*per day"),
+    re.compile(r"(?i)get rich"),
 ]
+
+POSITIVE_KEYWORDS_LOWER = [kw.lower() for kw in POSITIVE_KEYWORDS]
+NEGATIVE_KEYWORDS_LOWER = [kw.lower() for kw in NEGATIVE_KEYWORDS]
 
 
 class ContentCurator:
@@ -108,7 +111,7 @@ class ContentCurator:
         others.sort(key=lambda x: x.relevance_score, reverse=True)
 
         # 6. Garante slots para cada fonte, depois preenche com sobra
-        selected = newsletters + youtube + reddit + others
+        selected = youtube + reddit + newsletters + others
         selected = selected[:max_items]
 
         nl_count = len([i for i in selected if i.source == "Newsletter"])
@@ -152,7 +155,7 @@ class ContentCurator:
 
             is_spam = False
             for pattern in SPAM_PATTERNS:
-                if re.search(pattern, full_text):
+                if pattern.search(full_text):
                     is_spam = True
                     logger.debug(f"  Spam detectado: {item.title[:60]}")
                     break
@@ -169,14 +172,14 @@ class ContentCurator:
             full_text = f"{item.title} {item.description}".lower()
 
             # Bonus por palavras positivas
-            for keyword in POSITIVE_KEYWORDS:
-                if keyword.lower() in full_text:
+            for keyword in POSITIVE_KEYWORDS_LOWER:
+                if keyword in full_text:
                     score += 10
 
             # Penalidade por conteúdo muito técnico
             tech_count = 0
-            for keyword in NEGATIVE_KEYWORDS:
-                if keyword.lower() in full_text:
+            for keyword in NEGATIVE_KEYWORDS_LOWER:
+                if keyword in full_text:
                     tech_count += 1
                     score -= 5
 

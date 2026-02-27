@@ -14,9 +14,9 @@ interface SectionTabsProps {
 
 const TABS: { key: FilterType; label: string }[] = [
   { key: "all", label: "Todos" },
-  { key: "newsletters", label: "Newsletters" },
-  { key: "reddit", label: "Reddit" },
   { key: "youtube", label: "YouTube" },
+  { key: "reddit", label: "Reddit" },
+  { key: "newsletters", label: "Newsletters" },
 ];
 
 export function SectionTabs({ active, onChange, counts }: SectionTabsProps) {

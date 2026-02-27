@@ -118,6 +118,7 @@ class NewsletterScraper(BaseScraper):
             subtitle = post.get("web_subtitle", "")
             authors = post.get("authors", [])
             author_name = authors[0].get("name", name) if authors else name
+            published_date = post.get("publish_date", "") or post.get("created_at", "")
 
             items.append(
                 ScrapedItem(
@@ -128,6 +129,8 @@ class NewsletterScraper(BaseScraper):
                     author=author_name,
                     url=post_url,
                     tags=["newsletter", "ia", "tecnologia"],
+                    published_date=published_date,
+                    comment_count=0,
                 )
             )
 
@@ -229,6 +232,7 @@ class NewsletterScraper(BaseScraper):
             return None
 
         description = data.get("description", "")
+        published_date = data.get("datePublished", "") or data.get("dateModified", "")
         author_data = data.get("author", {})
         if isinstance(author_data, dict):
             author = author_data.get("name", source_name)
@@ -245,4 +249,6 @@ class NewsletterScraper(BaseScraper):
             author=author,
             url=url,
             tags=["newsletter", "ia", "tecnologia"],
+            published_date=published_date,
+            comment_count=0,
         )

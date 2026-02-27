@@ -106,10 +106,10 @@ class NotionClient:
         ))
         blocks.append(self._divider_block())
 
-        # Seção Newsletters
-        if newsletters:
-            blocks.append(self._heading_block("Newsletters", level=2))
-            for item in newsletters:
+        # Seção YouTube (prioridade)
+        if youtube_videos:
+            blocks.append(self._heading_block("YouTube", level=2))
+            for item in youtube_videos:
                 blocks.append(self._toggle_block(item))
 
         # Seção Reddit
@@ -118,10 +118,10 @@ class NotionClient:
             for item in reddit_posts:
                 blocks.append(self._toggle_block(item))
 
-        # Seção YouTube
-        if youtube_videos:
-            blocks.append(self._heading_block("YouTube", level=2))
-            for item in youtube_videos:
+        # Seção Newsletters
+        if newsletters:
+            blocks.append(self._heading_block("Newsletters", level=2))
+            for item in newsletters:
                 blocks.append(self._toggle_block(item))
 
         # Seção X

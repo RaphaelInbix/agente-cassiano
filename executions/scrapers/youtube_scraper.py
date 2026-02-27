@@ -193,6 +193,8 @@ class YouTubeScraper(BaseScraper):
                     url=video_url,
                     relevance_score=score,
                     tags=tags,
+                    published_date=published,
+                    comment_count=0,
                 )
             )
 

@@ -7,6 +7,8 @@ export interface CuratedItem {
   url: string;
   relevance_score: number;
   tags: string[];
+  published_date: string;
+  comment_count: number;
 }
 
 export interface CuradoriaData {

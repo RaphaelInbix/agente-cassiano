@@ -40,6 +40,21 @@ function getSourceIcon(source: string) {
   );
 }
 
+function formatDate(isoDate: string): string {
+  if (!isoDate) return "";
+  try {
+    const date = new Date(isoDate);
+    if (isNaN(date.getTime())) return "";
+    return date.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      timeZone: "America/Sao_Paulo",
+    });
+  } catch {
+    return "";
+  }
+}
+
 function truncateText(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return text.slice(0, maxLength).trimEnd() + "...";
@@ -55,11 +70,27 @@ export function ContentCard({ item }: ContentCardProps) {
           {getSourceIcon(item.source)}
           <span>{item.channel}</span>
         </div>
-        {item.relevance_score > 0 && (
-          <span className="card__score" title="Score de relevância">
-            {Math.round(item.relevance_score)}
-          </span>
-        )}
+        <div className="card__meta">
+          {item.published_date && formatDate(item.published_date) && (
+            <span className="card__date" title="Data de publicação">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+              {formatDate(item.published_date)}
+            </span>
+          )}
+          {item.comment_count > 0 && (
+            <span className="card__comments" title="Comentários">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              {item.comment_count}
+            </span>
+          )}
+        </div>
       </div>
 
       <h3 className="card__title">

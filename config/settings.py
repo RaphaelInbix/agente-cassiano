@@ -124,7 +124,7 @@ YOUTUBE_MAX_RESULTS = 15  # top vídeos após filtro por keywords
 # SCRAPING
 # ============================================================
 REQUEST_TIMEOUT = 10  # segundos
-REQUEST_DELAY = 0.3  # segundos entre requisições (anti-ban)
+REQUEST_DELAY = 0.15  # segundos entre requisições (anti-ban, reduzido para OAuth)
 MAX_RETRIES = 2
 
 USER_AGENT = (

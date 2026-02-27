@@ -1,13 +1,11 @@
 import React from "react";
 
 interface HeaderProps {
-  onUpdate: () => void;
-  loading: boolean;
   lastUpdate: string | null;
   totalItems: number;
 }
 
-export function Header({ onUpdate, loading, lastUpdate, totalItems }: HeaderProps) {
+export function Header({ lastUpdate, totalItems }: HeaderProps) {
   const formattedDate = lastUpdate
     ? new Date(lastUpdate).toLocaleDateString("pt-BR", {
         day: "2-digit",
@@ -55,28 +53,6 @@ export function Header({ onUpdate, loading, lastUpdate, totalItems }: HeaderProp
             )}
           </div>
         </div>
-        <button
-          className={`header__update-btn ${loading ? "header__update-btn--loading" : ""}`}
-          onClick={onUpdate}
-          disabled={loading}
-        >
-          {loading ? (
-            <>
-              <svg className="spinner" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-              </svg>
-              Atualizando...
-            </>
-          ) : (
-            <>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="23 4 23 10 17 10" />
-                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-              </svg>
-              Atualizar
-            </>
-          )}
-        </button>
       </div>
     </header>
   );

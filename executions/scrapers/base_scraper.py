@@ -29,6 +29,8 @@ class ScrapedItem:
     url: str
     relevance_score: float = 0.0
     tags: list = field(default_factory=list)
+    published_date: str = ""
+    comment_count: int = 0
 
 
 class BaseScraper:

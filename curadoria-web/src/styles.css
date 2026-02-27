@@ -197,41 +197,6 @@ button {
   opacity: 0.6;
 }
 
-/* Update Button */
-.header__update-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: 12px 24px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #ffffff;
-  background: var(--color-primary);
-  border-radius: var(--radius-md);
-  transition: all var(--transition);
-  white-space: nowrap;
-  flex-shrink: 0;
-  margin-top: 4px;
-}
-
-.header__update-btn:hover:not(:disabled) {
-  background: var(--color-primary-dark);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
-}
-
-.header__update-btn:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-.header__update-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.header__update-btn--loading {
-  background: var(--color-text-secondary);
-}
 
 @keyframes spin {
   from { transform: rotate(0deg); }
@@ -352,18 +317,28 @@ button {
   letter-spacing: 0.3px;
 }
 
-.card__score {
+.card__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.card__date,
+.card__comments {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-width: 32px;
-  height: 24px;
-  padding: 0 8px;
+  gap: 4px;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--color-text-muted);
   background: var(--color-bg);
+  padding: 2px 8px;
   border-radius: var(--radius-full);
+}
+
+.card__comments svg,
+.card__date svg {
+  opacity: 0.7;
 }
 
 .card__title {
@@ -542,6 +517,13 @@ button {
   background: var(--color-surface);
 }
 
+.footer__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+}
+
 .footer p {
   font-size: 13px;
   color: var(--color-text-muted);
@@ -549,6 +531,35 @@ button {
 
 .footer strong {
   color: var(--color-text-secondary);
+}
+
+.footer__update-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition);
+}
+
+.footer__update-btn:hover:not(:disabled) {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+.footer__update-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.footer__update-btn--loading {
+  color: var(--color-text-muted);
 }
 
 /* ============================================================
@@ -563,11 +574,6 @@ button {
 
   .header__title {
     font-size: 24px;
-  }
-
-  .header__update-btn {
-    width: 100%;
-    justify-content: center;
   }
 
   .main {

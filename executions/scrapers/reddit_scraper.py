@@ -10,6 +10,7 @@ Com OAuth: 60 requests/min garantidos, sem bloqueio por IP.
 import logging
 import time
 import requests
+from datetime import datetime, timezone
 from typing import Optional
 
 import sys
@@ -287,6 +288,11 @@ class RedditScraper(BaseScraper):
             score = post.get("score", 0)
             num_comments = post.get("num_comments", 0)
 
+            created_utc = post.get("created_utc", 0)
+            published_iso = ""
+            if created_utc:
+                published_iso = datetime.fromtimestamp(created_utc, tz=timezone.utc).isoformat()
+
             items.append(
                 ScrapedItem(
                     title=title,
@@ -297,6 +303,8 @@ class RedditScraper(BaseScraper):
                     url=post_url,
                     relevance_score=score + (num_comments * 2),
                     tags=["reddit", "ia", "tecnologia"],
+                    published_date=published_iso,
+                    comment_count=num_comments,
                 )
             )
 
