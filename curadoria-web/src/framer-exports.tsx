@@ -498,6 +498,16 @@ export function CuradoriaInbix() {
                         )}
                     </div>
                 </div>
+                <button
+                    className="curadoria-footer-btn"
+                    style={
+                        loading ? { color: "#a1a1aa", opacity: 0.6 } : {}
+                    }
+                    onClick={handleUpdate}
+                    disabled={loading}
+                >
+                    {loading ? "Atualizando..." : "Atualizar dados"}
+                </button>
             </div>
  
             {/* MAIN CONTENT */}
@@ -530,8 +540,7 @@ export function CuradoriaInbix() {
                                     marginBottom: 2,
                                 }}
                             >
-                                O script Python está rodando, aguarde alguns
-                                segundos
+                                Buscando novas atualizações
                             </strong>
                             {statusMsg && (
                                 <p
@@ -582,7 +591,7 @@ export function CuradoriaInbix() {
                     <div style={styles.empty}>
                         <h3>Nenhum conteúdo disponível</h3>
                         <p style={{ color: "#a1a1aa", fontSize: 14 }}>
-                            Clique em "Atualizar dados" no rodapé para buscar os
+                            Clique em "Atualizar dados" no topo da página para buscar os
                             artigos e posts mais recentes.
                         </p>
                     </div>
@@ -680,16 +689,6 @@ export function CuradoriaInbix() {
                         </strong>{" "}
                         — Curadoria automatizada Inbix
                     </p>
-                    <button
-                        className="curadoria-footer-btn"
-                        style={
-                            loading ? { color: "#a1a1aa", opacity: 0.6 } : {}
-                        }
-                        onClick={handleUpdate}
-                        disabled={loading}
-                    >
-                        {loading ? "Atualizando..." : "Atualizar dados"}
-                    </button>
                 </div>
             </div>
         </div>
