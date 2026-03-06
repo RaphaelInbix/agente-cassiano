@@ -1,8 +1,10 @@
 """
 Cliente para a API do Notion.
 Salva os artigos curados como blocos toggle na página configurada.
+Também armazena/restaura cache JSON para persistência entre deploys.
 """
 
+import json
 import logging
 import requests
 from datetime import datetime, timezone, timedelta
@@ -143,6 +145,74 @@ class NotionClient:
             logger.error("Houve erros na publicação no Notion.")
 
         return success
+
+    def save_cache(self, data: dict) -> bool:
+        """Salva dados da curadoria como code block no Notion (persistência entre deploys)."""
+        logger.info("Salvando cache JSON no Notion...")
+        json_str = json.dumps(data, ensure_ascii=False)
+
+        # Notion limita 2000 chars por rich_text element; chunk it
+        CHUNK = 2000
+        chunks = [json_str[i:i + CHUNK] for i in range(0, len(json_str), CHUNK)]
+
+        # Marker heading so we can find it later
+        blocks = [
+            {
+                "object": "block",
+                "type": "divider",
+                "divider": {},
+            },
+            {
+                "object": "block",
+                "type": "heading_3",
+                "heading_3": {
+                    "rich_text": [{"type": "text", "text": {"content": "CACHE_JSON_DATA"}}],
+                },
+            },
+            {
+                "object": "block",
+                "type": "code",
+                "code": {
+                    "rich_text": [
+                        {"type": "text", "text": {"content": chunk}}
+                        for chunk in chunks
+                    ],
+                    "language": "json",
+                },
+            },
+        ]
+        return self._append_blocks(blocks)
+
+    def read_cache(self) -> dict | None:
+        """Lê o cache JSON salvo no Notion. Retorna None se não encontrado."""
+        logger.info("Tentando restaurar cache do Notion...")
+        blocks = self._get_child_blocks()
+        if blocks is None:
+            return None
+
+        # Find the code block after the CACHE_JSON_DATA heading
+        found_marker = False
+        for block in blocks:
+            if not found_marker:
+                if block.get("type") == "heading_3":
+                    texts = block.get("heading_3", {}).get("rich_text", [])
+                    if any("CACHE_JSON_DATA" in t.get("text", {}).get("content", "") for t in texts):
+                        found_marker = True
+                continue
+
+            if block.get("type") == "code":
+                rich_text = block.get("code", {}).get("rich_text", [])
+                json_str = "".join(t.get("text", {}).get("content", "") for t in rich_text)
+                try:
+                    data = json.loads(json_str)
+                    logger.info(f"Cache restaurado do Notion: {data.get('total', 0)} itens")
+                    return data
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.error(f"Erro ao parsear cache do Notion: {e}")
+                    return None
+
+        logger.info("Nenhum cache encontrado no Notion.")
+        return None
 
     def _append_blocks(self, blocks: list[dict]) -> bool:
         """Envia blocos para a API do Notion."""

@@ -127,7 +127,10 @@ def run_pipeline_background():
                 # Limpa publicações antigas antes de publicar a nova
                 notion.clear_page()
                 notion.publish(items)
-                logger.info("Publicação no Notion concluída")
+                # Salva cache JSON no Notion para persistência entre deploys
+                cache_data = load_data()
+                notion.save_cache(cache_data)
+                logger.info("Publicação no Notion concluída (com cache)")
             except Exception as e:
                 logger.error(f"Erro ao publicar no Notion: {e}")
 
@@ -150,10 +153,26 @@ def save_data(items):
 
 
 def load_data():
-    """Carrega dados do cache JSON."""
+    """Carrega dados do cache JSON. Restaura do Notion se arquivo local não existir."""
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
+
+    # Arquivo local perdido (ex: Render cold start) — tenta restaurar do Notion
+    try:
+        logger.info("Arquivo local não encontrado, tentando restaurar do Notion...")
+        notion = NotionClient()
+        data = notion.read_cache()
+        if data and data.get("items"):
+            # Salva localmente para requests subsequentes
+            os.makedirs(DATA_DIR, exist_ok=True)
+            with open(DATA_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            logger.info(f"Cache restaurado do Notion: {data.get('total', 0)} itens")
+            return data
+    except Exception as e:
+        logger.error(f"Erro ao restaurar cache do Notion: {e}")
+
     return {"updated_at": None, "total": 0, "items": []}
 
 
