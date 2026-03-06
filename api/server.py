@@ -179,7 +179,13 @@ def atualizar():
     """Inicia o pipeline em background e retorna imediatamente."""
     status = load_status()
     if status.get("status") == "running":
-        return jsonify({"success": True, "message": "Atualização já em andamento"})
+        # Verifica se não é um status travado (mais de 5 min)
+        try:
+            started = datetime.fromisoformat(status.get("timestamp", ""))
+            if (datetime.now() - started).total_seconds() < 300:
+                return jsonify({"success": True, "message": "Atualização já em andamento"})
+        except (ValueError, TypeError):
+            pass
 
     thread = threading.Thread(target=run_pipeline_background, daemon=True)
     thread.start()
@@ -188,8 +194,22 @@ def atualizar():
 
 @app.route("/api/status", methods=["GET"])
 def get_status():
-    """Retorna o status atual do pipeline."""
-    return jsonify(load_status())
+    """Retorna o status atual do pipeline. Detecta pipelines travados."""
+    status = load_status()
+
+    # Se está "running" há mais de 5 minutos, considera como erro (pipeline travou)
+    if status.get("status") == "running" and status.get("timestamp"):
+        try:
+            started = datetime.fromisoformat(status["timestamp"])
+            elapsed = (datetime.now() - started).total_seconds()
+            if elapsed > 300:  # 5 minutos
+                status["status"] = "error"
+                status["detail"] = "Pipeline travou (timeout de 5 min). Tente novamente."
+                save_status("error", status["detail"])
+        except (ValueError, TypeError):
+            pass
+
+    return jsonify(status)
 
 
 @app.route("/api/limpar-notion", methods=["POST"])
