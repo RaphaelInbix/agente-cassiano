@@ -183,6 +183,43 @@ class NotionClient:
         ]
         return self._append_blocks(blocks)
 
+    def delete_cache_blocks(self) -> bool:
+        """Remove apenas os blocos de cache (divider + heading CACHE_JSON_DATA + code)."""
+        blocks = self._get_child_blocks()
+        if blocks is None:
+            return False
+
+        found_marker = False
+        to_delete = []
+        for i, block in enumerate(blocks):
+            if not found_marker:
+                # O divider vem logo antes do heading
+                if block.get("type") == "heading_3":
+                    texts = block.get("heading_3", {}).get("rich_text", [])
+                    if any("CACHE_JSON_DATA" in t.get("text", {}).get("content", "") for t in texts):
+                        found_marker = True
+                        to_delete.append(block.get("id"))
+                        # Divider anterior
+                        if i > 0 and blocks[i - 1].get("type") == "divider":
+                            to_delete.append(blocks[i - 1].get("id"))
+                continue
+            # Após o marker, pega o code block e para
+            if block.get("type") == "code":
+                to_delete.append(block.get("id"))
+                break
+
+        for block_id in to_delete:
+            if block_id:
+                try:
+                    requests.delete(
+                        f"{NOTION_BASE_URL}/blocks/{block_id}",
+                        headers=self.headers,
+                    )
+                except requests.RequestException:
+                    pass
+
+        return True
+
     def read_cache(self) -> dict | None:
         """Lê o cache JSON salvo no Notion. Retorna None se não encontrado."""
         logger.info("Tentando restaurar cache do Notion...")

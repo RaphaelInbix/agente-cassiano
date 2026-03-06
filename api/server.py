@@ -124,13 +124,32 @@ def run_pipeline_background():
         if items:
             try:
                 notion = NotionClient()
-                # Limpa publicações antigas antes de publicar a nova
-                notion.clear_page()
-                notion.publish(items)
-                # Salva cache JSON no Notion para persistência entre deploys
                 cache_data = load_data()
+
+                # Só faz clear + publish completo a cada 3 dias
+                should_full_publish = True
+                last_clear = cache_data.get("last_notion_clear")
+                if last_clear:
+                    try:
+                        last_dt = datetime.fromisoformat(last_clear)
+                        if (datetime.now() - last_dt).total_seconds() < 3 * 86400:
+                            should_full_publish = False
+                    except (ValueError, TypeError):
+                        pass
+
+                if should_full_publish:
+                    notion.clear_page()
+                    notion.publish(items)
+                    cache_data["last_notion_clear"] = datetime.now().isoformat()
+                    logger.info("Publicação completa no Notion (clear + publish)")
+                else:
+                    # Apenas atualiza o cache, remove blocos antigos de cache
+                    notion.delete_cache_blocks()
+                    logger.info("Notion: apenas atualizando cache (próximo clear em 3 dias)")
+
                 notion.save_cache(cache_data)
-                logger.info("Publicação no Notion concluída (com cache)")
+                # Salva last_notion_clear no arquivo local também
+                save_data_raw(cache_data)
             except Exception as e:
                 logger.error(f"Erro ao publicar no Notion: {e}")
 
@@ -150,6 +169,13 @@ def save_data(items):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     return data
+
+
+def save_data_raw(data: dict):
+    """Salva dict de dados diretamente (para atualizar metadados como last_notion_clear)."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 def load_data():
