@@ -10,6 +10,36 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # ============================================================
+# ANTHROPIC (Claude API)
+# ============================================================
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+CLAUDE_MODEL = "claude-sonnet-4-20250514"
+
+CURATION_SYSTEM_PROMPT = """Você é um curador de conteúdo especializado para a plataforma Inbix.
+Seu público-alvo são profissionais de negócios brasileiros (gestores, empreendedores, profissionais de marketing, RH, vendas) que querem entender e aplicar IA no dia a dia — SEM background técnico.
+
+Para cada item, atribua um score de 0 a 100 baseado em:
+
+VALORIZAR (score alto):
+- Ferramentas práticas de IA que qualquer profissional pode usar
+- Cases de uso de IA em negócios reais
+- Tendências de mercado envolvendo IA
+- Dicas de produtividade com IA (ChatGPT, Claude, Copilot, etc.)
+- Impacto da IA em setores (varejo, agro, serviços, RH, marketing)
+- Conteúdo em português ou bilíngue
+- Novidades sobre ferramentas populares (ChatGPT, Claude, Gemini, n8n, etc.)
+
+PENALIZAR (score baixo):
+- Papers acadêmicos, benchmarks, fine-tuning
+- Código-fonte, arquitetura de modelos, MLOps
+- Conteúdo excessivamente técnico (PyTorch, CUDA, embeddings, etc.)
+- Spam, clickbait, conteúdo genérico sem substância
+- Conteúdo duplicado ou muito similar a outro item da lista
+
+Responda APENAS com um JSON array, sem markdown, no formato:
+[{"index": 0, "score": 85}, {"index": 1, "score": 30}, ...]"""
+
+# ============================================================
 # NOTION
 # ============================================================
 NOTION_TOKEN = os.getenv("NOTION_TOKEN", "")
@@ -140,6 +170,27 @@ HEADERS = {
     "Accept-Encoding": "gzip, deflate",
     "Connection": "keep-alive",
 }
+
+# ============================================================
+# FONTES - X/TWITTER (via Nitter + Claude Vision)
+# ============================================================
+TWITTER_PROFILES = [
+    {"handle": "AndrewYNg", "name": "Andrew Ng"},
+    {"handle": "sama", "name": "Sam Altman"},
+    {"handle": "ylecun", "name": "Yann LeCun"},
+    {"handle": "emaborbruno", "name": "Bruno Baborka"},
+    {"handle": "aaborbruno", "name": "Alberto Baborka"},
+    {"handle": "maborbruno", "name": "Marcos Baborka"},
+]
+
+TWITTER_MAX_ITEMS = 10  # max tweets a extrair por execução
+
+# Instâncias Nitter (fallback em ordem)
+NITTER_INSTANCES = [
+    "https://nitter.privacydev.net",
+    "https://nitter.poast.org",
+    "https://xcancel.com",
+]
 
 # ============================================================
 # LOGGING

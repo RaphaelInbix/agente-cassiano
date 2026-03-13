@@ -113,6 +113,7 @@ function App() {
     if (filter === "newsletters") return item.source === "Newsletter";
     if (filter === "reddit") return item.source === "Reddit";
     if (filter === "youtube") return item.source === "YouTube";
+    if (filter === "twitter") return item.source === "Twitter";
     return true;
   });
 
@@ -121,6 +122,7 @@ function App() {
     newsletters: items.filter((i) => i.source === "Newsletter").length,
     reddit: items.filter((i) => i.source === "Reddit").length,
     youtube: items.filter((i) => i.source === "YouTube").length,
+    twitter: items.filter((i) => i.source === "Twitter").length,
   };
 
   return (
@@ -172,8 +174,8 @@ function App() {
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
               <polyline points="14 2 14 8 20 8" />
             </svg>
-            <h3>Nenhum conteúdo disponível</h3>
-            <p>Clique em "Atualizar dados" no rodapé para buscar os artigos e posts mais recentes.</p>
+            <h3>Carregando conteúdo...</h3>
+            <p>A curadoria está sendo preparada automaticamente. Aguarde alguns instantes.</p>
           </div>
         ) : (
           <div className="content-grid">

@@ -1,9 +1,12 @@
 """
 Módulo de curadoria e filtragem de conteúdo.
-Filtra, pontua e seleciona os artigos mais relevantes para o público-alvo:
-profissionais de economia real sem background técnico em IA.
+Usa Claude 3.5 Sonnet para avaliar relevância semanticamente,
+com fallback para scoring por keywords se a API falhar.
+
+Público-alvo: profissionais de economia real sem background técnico em IA.
 """
 
+import json
 import logging
 import re
 from collections import Counter
@@ -13,47 +16,9 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from executions.scrapers.base_scraper import ScrapedItem
+from config.settings import ANTHROPIC_API_KEY, CLAUDE_MODEL, CURATION_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
-
-# Palavras-chave que aumentam relevância para o público-alvo
-POSITIVE_KEYWORDS = [
-    # Negócios
-    "business", "empresa", "negócio", "negocio", "company", "startup",
-    "empreendedor", "entrepreneur", "revenue", "receita", "profit",
-    "marketing", "sales", "vendas", "roi", "produtividade", "productivity",
-    "eficiência", "efficiency", "automação", "automation", "workflow",
-    # Setores econômicos
-    "indústria", "industry", "manufatura", "manufacturing", "agro",
-    "agronegócio", "agribusiness", "comércio", "commerce", "retail",
-    "varejo", "serviços", "services", "logística", "logistics",
-    "supply chain", "cadeia de suprimentos",
-    # IA aplicada
-    "ai tool", "ferramenta de ia", "chatgpt", "copilot", "assistente",
-    "assistant", "no-code", "low-code", "ai agent", "agente de ia",
-    "prompt", "generative ai", "ia generativa",
-    # Impacto prático
-    "how to", "como usar", "tutorial", "guia", "guide", "dica", "tip",
-    "case study", "caso de uso", "use case", "example", "exemplo",
-    "free", "grátis", "gratuito", "launch", "lançamento", "new tool",
-    "nova ferramenta", "trending", "future", "futuro",
-    # RH e gestão
-    "hr", "recursos humanos", "human resources", "manager", "gestor",
-    "gestão", "management", "team", "equipe", "hiring", "contratação",
-    "career", "carreira",
-]
-
-# Palavras-chave que reduzem relevância (conteúdo muito técnico)
-NEGATIVE_KEYWORDS = [
-    "arxiv", "paper", "benchmark", "fine-tune", "fine-tuning",
-    "transformer", "attention mechanism", "gradient", "backpropagation",
-    "pytorch", "tensorflow", "cuda", "gpu cluster", "training loss",
-    "epoch", "hyperparameter", "rlhf", "token limit", "context window",
-    "embedding", "vector database", "rag pipeline", "langchain",
-    "llama weights", "model weights", "checkpoint", "quantization",
-    "inference speed", "vram", "kernel", "compiler", "assembly",
-    "leetcode", "algorithm", "data structure",
-]
 
 # Conteúdo que deve ser filtrado (spam, irrelevante)
 SPAM_PATTERNS = [
@@ -66,12 +31,41 @@ SPAM_PATTERNS = [
     re.compile(r"(?i)get rich"),
 ]
 
-POSITIVE_KEYWORDS_LOWER = [kw.lower() for kw in POSITIVE_KEYWORDS]
-NEGATIVE_KEYWORDS_LOWER = [kw.lower() for kw in NEGATIVE_KEYWORDS]
+# Fallback keywords (usadas quando a API Claude não está disponível)
+POSITIVE_KEYWORDS_LOWER = [
+    "business", "empresa", "negócio", "startup", "marketing", "sales",
+    "vendas", "produtividade", "automação", "automation", "workflow",
+    "ai tool", "ferramenta de ia", "chatgpt", "copilot", "assistente",
+    "no-code", "low-code", "ai agent", "prompt", "ia generativa",
+    "how to", "como usar", "tutorial", "guia", "case study", "trending",
+    "hr", "recursos humanos", "manager", "gestão", "career", "carreira",
+]
+
+NEGATIVE_KEYWORDS_LOWER = [
+    "arxiv", "paper", "benchmark", "fine-tune", "fine-tuning",
+    "transformer", "attention mechanism", "gradient", "backpropagation",
+    "pytorch", "tensorflow", "cuda", "gpu cluster", "training loss",
+    "epoch", "hyperparameter", "rlhf", "embedding", "vector database",
+    "langchain", "model weights", "checkpoint", "quantization",
+    "vram", "kernel", "compiler", "leetcode", "algorithm",
+]
 
 
 class ContentCurator:
-    """Filtra e pontua conteúdo para o público-alvo."""
+    """Filtra e pontua conteúdo para o público-alvo usando Claude API."""
+
+    def __init__(self):
+        self._client = None
+
+    def _get_client(self):
+        """Lazy-load do cliente Anthropic."""
+        if self._client is None and ANTHROPIC_API_KEY:
+            try:
+                import anthropic
+                self._client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+            except Exception as e:
+                logger.error(f"Erro ao inicializar cliente Anthropic: {e}")
+        return self._client
 
     def curate(
         self, items: list[ScrapedItem], max_items: int = 30
@@ -87,42 +81,116 @@ class ContentCurator:
         items = self._filter_spam(items)
         logger.info(f"  Após filtro de spam: {len(items)} itens")
 
-        # 3. Separa por fonte (cada uma tem inclusão garantida)
-        newsletters = [i for i in items if i.source == "Newsletter"]
-        reddit = [i for i in items if i.source == "Reddit"]
-        youtube = [i for i in items if i.source == "YouTube"]
-        others = [i for i in items if i.source not in ("Newsletter", "Reddit", "YouTube")]
+        # 3. Pontua relevância via Claude (ou fallback por keywords)
+        items = self._score_with_claude(items)
 
-        logger.info(
-            f"  Newsletters: {len(newsletters)} | Reddit: {len(reddit)} | "
-            f"YouTube: {len(youtube)} | Outros: {len(others)}"
-        )
+        # 4. Ordena por relevância
+        items.sort(key=lambda x: x.relevance_score, reverse=True)
 
-        # 4. Pontua relevância de cada grupo
-        newsletters = self._score_relevance(newsletters)
-        reddit = self._score_relevance(reddit)
-        youtube = self._score_relevance(youtube)
-        others = self._score_relevance(others)
+        # 5. Seleciona os melhores
+        selected = items[:max_items]
 
-        # 5. Ordena cada grupo por relevância
-        newsletters.sort(key=lambda x: x.relevance_score, reverse=True)
-        reddit.sort(key=lambda x: x.relevance_score, reverse=True)
-        youtube.sort(key=lambda x: x.relevance_score, reverse=True)
-        others.sort(key=lambda x: x.relevance_score, reverse=True)
-
-        # 6. Garante slots para cada fonte, depois preenche com sobra
-        selected = youtube + reddit + newsletters + others
-        selected = selected[:max_items]
-
-        nl_count = len([i for i in selected if i.source == "Newsletter"])
-        rd_count = len([i for i in selected if i.source == "Reddit"])
-        yt_count = len([i for i in selected if i.source == "YouTube"])
+        # Log por fonte
+        sources = Counter(i.source for i in selected)
         logger.info(
             f"  Selecionados: {len(selected)} itens finais "
-            f"({nl_count} newsletters + {rd_count} reddit + {yt_count} youtube)"
+            f"({sources})"
         )
 
         return selected
+
+    def _score_with_claude(self, items: list[ScrapedItem]) -> list[ScrapedItem]:
+        """Pontua itens usando Claude API. Fallback para keywords se falhar."""
+        client = self._get_client()
+        if not client:
+            logger.warning("Claude API indisponível — usando fallback por keywords")
+            return self._score_relevance_fallback(items)
+
+        # Processa em batches de 15 para economizar tokens
+        batch_size = 15
+        scored_items = []
+
+        for i in range(0, len(items), batch_size):
+            batch = items[i:i + batch_size]
+            try:
+                scores = self._call_claude_for_scores(client, batch)
+                for idx, item in enumerate(batch):
+                    if idx in scores:
+                        item.relevance_score = scores[idx]
+                    # Mantém score original se Claude não retornou para este item
+                scored_items.extend(batch)
+            except Exception as e:
+                logger.error(f"Erro na curadoria Claude (batch {i}): {e}")
+                # Fallback para este batch
+                scored_items.extend(self._score_relevance_fallback(batch))
+
+        return scored_items
+
+    def _call_claude_for_scores(
+        self, client, batch: list[ScrapedItem]
+    ) -> dict[int, float]:
+        """Chama Claude API para pontuar um batch de itens."""
+        # Monta a lista de itens para o prompt
+        items_text = []
+        for idx, item in enumerate(batch):
+            desc = item.description[:200] if item.description else "(sem descrição)"
+            items_text.append(
+                f"[{idx}] Fonte: {item.source}/{item.channel}\n"
+                f"    Título: {item.title}\n"
+                f"    Descrição: {desc}"
+            )
+
+        user_message = (
+            "Avalie os itens abaixo e retorne APENAS o JSON array com scores.\n\n"
+            + "\n\n".join(items_text)
+        )
+
+        response = client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=1024,
+            system=CURATION_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_message}],
+        )
+
+        # Parse da resposta
+        response_text = response.content[0].text.strip()
+        # Remove possível markdown wrapping
+        if response_text.startswith("```"):
+            response_text = re.sub(r"^```\w*\n?", "", response_text)
+            response_text = re.sub(r"\n?```$", "", response_text)
+
+        scores_list = json.loads(response_text)
+        return {item["index"]: item["score"] for item in scores_list}
+
+    def _score_relevance_fallback(
+        self, items: list[ScrapedItem]
+    ) -> list[ScrapedItem]:
+        """Fallback: pontua cada item com base em keywords (sem API)."""
+        for item in items:
+            score = item.relevance_score
+            full_text = f"{item.title} {item.description}".lower()
+
+            for keyword in POSITIVE_KEYWORDS_LOWER:
+                if keyword in full_text:
+                    score += 10
+
+            tech_count = 0
+            for keyword in NEGATIVE_KEYWORDS_LOWER:
+                if keyword in full_text:
+                    tech_count += 1
+                    score -= 5
+
+            if tech_count > 3:
+                score -= 20
+
+            if len(item.description) > 100:
+                score += 5
+            if 20 < len(item.title) < 100:
+                score += 3
+
+            item.relevance_score = max(0, score)
+
+        return items
 
     def _deduplicate(self, items: list[ScrapedItem]) -> list[ScrapedItem]:
         """Remove itens duplicados por URL ou título similar."""
@@ -131,12 +199,10 @@ class ContentCurator:
         unique = []
 
         for item in items:
-            # Normaliza URL
             url_key = item.url.rstrip("/").lower()
             if url_key in seen_urls:
                 continue
 
-            # Normaliza título para comparação
             title_key = self._normalize_text(item.title)
             if title_key in seen_titles:
                 continue
@@ -152,59 +218,18 @@ class ContentCurator:
         filtered = []
         for item in items:
             full_text = f"{item.title} {item.description}".lower()
-
-            is_spam = False
-            for pattern in SPAM_PATTERNS:
-                if pattern.search(full_text):
-                    is_spam = True
-                    logger.debug(f"  Spam detectado: {item.title[:60]}")
-                    break
-
+            is_spam = any(pattern.search(full_text) for pattern in SPAM_PATTERNS)
             if not is_spam:
                 filtered.append(item)
-
+            else:
+                logger.debug(f"  Spam detectado: {item.title[:60]}")
         return filtered
-
-    def _score_relevance(self, items: list[ScrapedItem]) -> list[ScrapedItem]:
-        """Pontua cada item com base em keywords e heurísticas."""
-        for item in items:
-            score = item.relevance_score  # Mantém score original (upvotes, etc.)
-            full_text = f"{item.title} {item.description}".lower()
-
-            # Bonus por palavras positivas
-            for keyword in POSITIVE_KEYWORDS_LOWER:
-                if keyword in full_text:
-                    score += 10
-
-            # Penalidade por conteúdo muito técnico
-            tech_count = 0
-            for keyword in NEGATIVE_KEYWORDS_LOWER:
-                if keyword in full_text:
-                    tech_count += 1
-                    score -= 5
-
-            # Se o conteúdo é excessivamente técnico, penaliza mais
-            if tech_count > 3:
-                score -= 20
-
-            # Bonus por ter descrição substancial
-            if len(item.description) > 100:
-                score += 5
-
-            # Bonus por título claro (não muito curto nem muito longo)
-            if 20 < len(item.title) < 100:
-                score += 3
-
-            item.relevance_score = max(0, score)
-
-        return items
 
     def _normalize_text(self, text: str) -> str:
         """Normaliza texto para comparação de similaridade."""
         text = text.lower().strip()
         text = re.sub(r"[^\w\s]", "", text)
         text = re.sub(r"\s+", " ", text)
-        # Pega as primeiras 8 palavras para comparação
         words = text.split()[:8]
         return " ".join(words)
 
@@ -217,7 +242,6 @@ class ContentCurator:
             if items
             else 0
         )
-
         return {
             "total_items": len(items),
             "by_source": dict(sources),

@@ -1,0 +1,21 @@
+services:
+  curadoria:
+    build: .
+    container_name: curadoria-inbix
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - NOTION_TOKEN=${NOTION_TOKEN}
+      - NOTION_PAGE_ID=${NOTION_PAGE_ID}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID:-}
+      - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET:-}
+    volumes:
+      - curadoria-data:/app/data
+      - curadoria-logs:/app/logs
+
+volumes:
+  curadoria-data:
+  curadoria-logs:

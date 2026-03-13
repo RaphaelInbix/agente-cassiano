@@ -23,12 +23,20 @@ from flask_cors import CORS
 from executions.scrapers.newsletter_scraper import NewsletterScraper
 from executions.scrapers.reddit_scraper import RedditScraper
 from executions.scrapers.youtube_scraper import YouTubeScraper
+from executions.scrapers.twitter_scraper import TwitterScraper
 from executions.processors.content_curator import ContentCurator
 from executions.integrations.notion_client import NotionClient
 
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+# Detecta diretório do frontend build (produção: /app/curadoria-web/dist)
+FRONTEND_DIR = os.path.join(ROOT_DIR, "curadoria-web", "dist")
+
+app = Flask(
+    __name__,
+    static_folder=FRONTEND_DIR if os.path.isdir(FRONTEND_DIR) else None,
+    static_url_path="",
+)
 CORS(app)
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
@@ -92,13 +100,25 @@ def run_pipeline():
             logger.error(f"Erro ao coletar YouTube: {e}")
             return []
 
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    def _scrape_twitter():
+        try:
+            scraper = TwitterScraper()
+            items = scraper.scrape()
+            logger.info(f"Twitter: {len(items)} tweets coletados")
+            return items
+        except Exception as e:
+            logger.error(f"Erro ao coletar Twitter: {e}")
+            return []
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
         nl_future = pool.submit(_scrape_newsletters)
         rd_future = pool.submit(_scrape_reddit)
         yt_future = pool.submit(_scrape_youtube)
+        tw_future = pool.submit(_scrape_twitter)
         all_items.extend(nl_future.result())
         all_items.extend(rd_future.result())
         all_items.extend(yt_future.result())
+        all_items.extend(tw_future.result())
 
     if not all_items:
         save_status("done", "Nenhum item coletado")
@@ -276,6 +296,20 @@ def limpar_notion():
 def health():
     """Health check."""
     return jsonify({"status": "ok", "timestamp": datetime.now().isoformat()})
+
+
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve_frontend(path):
+    """Serve o frontend React (SPA). Qualquer rota não-API retorna index.html."""
+    if FRONTEND_DIR and os.path.isdir(FRONTEND_DIR):
+        file_path = os.path.join(FRONTEND_DIR, path)
+        if path and os.path.isfile(file_path):
+            return app.send_static_file(path)
+        index_path = os.path.join(FRONTEND_DIR, "index.html")
+        if os.path.isfile(index_path):
+            return app.send_static_file("index.html")
+    return jsonify({"error": "Frontend not built. Run npm run build in curadoria-web/"}), 404
 
 
 if __name__ == "__main__":

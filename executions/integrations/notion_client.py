@@ -97,7 +97,7 @@ class NotionClient:
         newsletters = [i for i in items if i.source == "Newsletter"]
         reddit_posts = [i for i in items if i.source == "Reddit"]
         youtube_videos = [i for i in items if i.source == "YouTube"]
-        x_posts = [i for i in items if i.source == "X (Twitter)"]
+        x_posts = [i for i in items if i.source in ("Twitter", "X (Twitter)")]
 
         blocks = []
 
